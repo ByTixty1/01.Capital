@@ -105,6 +105,38 @@ async def test_waive_after_exercise(db_client, mfa_headers, company_id, stakehol
 
 
 @pytest.mark.asyncio
+async def test_create_rejects_foreign_stakeholder(db_client, mfa_headers, company_id, stakeholder_id):
+    # A stakeholder that lives in a different company must not be referenceable.
+    other = (await db_client.post(
+        "/api/companies", json={"name_en": "Other Co", "entity_type": "LLC"}, headers=mfa_headers
+    )).json()["id"]
+    foreign_sh = (await db_client.post(
+        f"/api/companies/{other}/stakeholders",
+        json={"stakeholder_type": "natural_person", "name_en": "Outsider"},
+        headers=mfa_headers,
+    )).json()["id"]
+    res = await _create_right(db_client, mfa_headers, company_id, foreign_sh)
+    assert res.status_code == 404, res.text
+
+
+@pytest.mark.asyncio
+async def test_exercise_after_deadline_expires(db_client, mfa_headers, company_id, stakeholder_id):
+    right = (await _create_right(
+        db_client, mfa_headers, company_id, stakeholder_id, deadline="2020-01-01"
+    )).json()
+    res = await db_client.post(
+        f"/api/companies/{company_id}/pro-rata-rights/{right['id']}/exercise",
+        json={"exercised_amount_sar": "500000.00"},
+        headers=mfa_headers,
+    )
+    assert res.status_code == 400, res.text
+    listed = (await db_client.get(
+        f"/api/companies/{company_id}/pro-rata-rights", headers=mfa_headers
+    )).json()
+    assert listed[0]["status"] == "expired"
+
+
+@pytest.mark.asyncio
 async def test_wrong_company_isolation(db_client, mfa_headers, company_id, stakeholder_id):
     right = (await _create_right(db_client, mfa_headers, company_id, stakeholder_id)).json()
     # A second company owned by the same user — the right belongs to the first one.

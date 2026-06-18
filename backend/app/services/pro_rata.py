@@ -6,14 +6,16 @@ exercised or waived (or expired) cannot transition again.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.instrument import Instrument
 from app.models.pro_rata_right import ProRataRight, ProRataStatus
+from app.models.stakeholder import Stakeholder
 from app.schemas.pro_rata import ProRataRightCreate
 
 
@@ -29,6 +31,25 @@ async def list_pro_rata_rights(db: AsyncSession, company_id: uuid.UUID) -> list[
 async def create_pro_rata_right(
     db: AsyncSession, company_id: uuid.UUID, body: ProRataRightCreate
 ) -> ProRataRight:
+    stakeholder = await db.execute(
+        select(Stakeholder.id).where(
+            Stakeholder.id == body.stakeholder_id,
+            Stakeholder.company_id == company_id,
+        )
+    )
+    if stakeholder.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stakeholder not found")
+
+    if body.instrument_id is not None:
+        instrument = await db.execute(
+            select(Instrument.id).where(
+                Instrument.id == body.instrument_id,
+                Instrument.company_id == company_id,
+            )
+        )
+        if instrument.scalar_one_or_none() is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instrument not found")
+
     right = ProRataRight(company_id=company_id, **body.model_dump())
     db.add(right)
     await db.commit()
@@ -51,6 +72,17 @@ async def _get_scoped(
     return right
 
 
+async def _reject_if_expired(db: AsyncSession, right: ProRataRight, verb: str) -> None:
+    """Lapse a past-deadline right to EXPIRED and reject the transition."""
+    if right.deadline is not None and date.today() > right.deadline:
+        right.status = ProRataStatus.EXPIRED
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Pro-rata right expired on {right.deadline}, cannot {verb}",
+        )
+
+
 async def exercise_pro_rata_right(
     db: AsyncSession, company_id: uuid.UUID, right_id: uuid.UUID, amount: Decimal
 ) -> ProRataRight:
@@ -60,6 +92,7 @@ async def exercise_pro_rata_right(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pro-rata right is {right.status}, cannot exercise",
         )
+    await _reject_if_expired(db, right, "exercise")
     if amount > right.max_investment_sar:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -82,6 +115,7 @@ async def waive_pro_rata_right(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pro-rata right is {right.status}, cannot waive",
         )
+    await _reject_if_expired(db, right, "waive")
     right.status = ProRataStatus.WAIVED
     await db.commit()
     await db.refresh(right)
