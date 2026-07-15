@@ -175,3 +175,13 @@ Do not silently comply with rule-violating requests. Do not refuse and stop. Sur
 - *Strategic* questions (should we build X, positioning, customer): defer to the user
 - *Legal* questions (Saudi law, lawyer review needed): defer to the user and flag for legal review — do not invent legal interpretations
 - *Technical* questions (architecture, library choice): propose with clear reasoning, ask the user to confirm, document in an ADR
+
+---
+
+## Health Stack
+
+- typecheck: cd frontend && npx tsc --noEmit
+- lint: cd frontend && npx eslint .
+- test: cd backend && .venv/bin/python3.13 -m pytest (env: TEST_DATABASE_URL → local 01capital_test DB, RATE_LIMIT_ENABLED=false, DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib; never run overlapping pytest sessions)
+- deadcode: skipped (knip not installed)
+- shell: skipped (shellcheck not installed)
