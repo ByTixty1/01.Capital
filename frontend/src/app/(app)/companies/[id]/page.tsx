@@ -117,7 +117,7 @@ export default function CompanyPage() {
             }}>
               {company.entity_type}
             </span>
-            <h1 style={{ fontSize: '34px', fontWeight: 400, color: 'var(--text-primary)', marginBottom: '4px', fontFamily: 'var(--font-serif)', letterSpacing: '-0.01em' }}>
+            <h1 data-ghost="app_captable_headline" style={{ fontSize: '34px', fontWeight: 400, color: 'var(--text-primary)', marginBottom: '4px', fontFamily: 'var(--font-serif)', letterSpacing: '-0.01em' }}>
               {company.name_en}
             </h1>
             {company.name_ar && <p style={{ fontSize: '16px', color: 'var(--text-secondary)', direction: 'rtl' }}>{company.name_ar}</p>}
@@ -168,7 +168,7 @@ export default function CompanyPage() {
       </div>
 
       {/* Capital Summary Stats */}
-      <div className="glass-panel" style={{ 
+      <div data-ghost="app_captable_summary" className="glass-panel" style={{
         padding: 0, overflow: 'hidden', display: 'grid', 
         gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
         gap: '1px', background: 'var(--glass-border)',
@@ -203,7 +203,7 @@ export default function CompanyPage() {
       </div>
 
       {/* Ownership Chart + Cap Table */}
-      <div id="cap-table" className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
+      <div id="cap-table" data-ghost="app_captable_holdings" className="glass-panel" style={{ padding: '0', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--glass-border)', gap: '16px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>Cap table</h2>
@@ -446,4 +446,3 @@ export default function CompanyPage() {
     </div>
   );
 }
-

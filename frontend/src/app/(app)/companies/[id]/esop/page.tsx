@@ -20,13 +20,13 @@ export default function EsopPage() {
     <div style={s.page}>
       <div style={s.back}><a href={`/companies/${companyId}`} style={s.backLink}>← Back</a></div>
       <div style={s.header}>
-        <div><h1 style={s.heading}>ESOP Plans</h1><p style={s.sub}>Employee equity grant pools</p></div>
-        <a href={`/companies/${companyId}/esop/new`} className="btn-primary" style={s.cta}>+ New plan</a>
+        <div><h1 data-ghost="app_esop_headline" style={s.heading}>ESOP Plans</h1><p style={s.sub}>Employee equity grant pools</p></div>
+        <a data-ghost="app_esop_new" href={`/companies/${companyId}/esop/new`} className="btn-primary" style={s.cta}>+ New plan</a>
       </div>
       {loading && <p style={s.muted}>Loading…</p>}
       {error && <p style={s.error}>{error}</p>}
       {!loading && plans.length === 0 && <p style={s.muted}>No ESOP plans yet. Create one to start issuing grants.</p>}
-      <div style={s.list}>
+      <div data-ghost="app_esop_list" style={s.list}>
         {plans.map(p => (
           <a key={p.id} href={`/companies/${companyId}/esop/${p.id}`} style={s.card}>
             <div style={s.cardTop}>

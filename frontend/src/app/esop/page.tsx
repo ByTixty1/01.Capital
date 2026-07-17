@@ -3,6 +3,7 @@ import { MarketingFeaturePage } from '@/components/MarketingFeaturePage';
 export default function ESOPPage() {
   return (
     <MarketingFeaturePage
+      ghostPrefix="esop_page"
       badge="ESOP"
       headline={<>Employee equity,<br />done right</>}
       sub="CMA-compliant ESOP plans for Saudi companies. Model vesting schedules, track grant status, and give employees a clear view of what they've earned."

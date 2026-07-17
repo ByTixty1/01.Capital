@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
 import { PageBackground } from '@/components/PageBackground';
 import { Logo } from '@/components/Logo';
+import { useQareenStore } from '@/lib/qareen/store';
 
 const monoSm: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -19,6 +20,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const pathname = usePathname();
   const [companyName, setCompanyName] = useState<string | null>(null);
+  const summoned = useQareenStore((state) => state.summoned);
+  const setSummoned = useQareenStore((state) => state.setSummoned);
 
   const companyMatch = pathname.match(/^\/companies\/([^/]+)/);
   const activeCompanyId = companyMatch?.[1];
@@ -108,6 +111,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Right: user + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setSummoned(!summoned)}
+            aria-label={summoned ? 'Dismiss Qareen' : 'Open Qareen, the AI assistant'}
+            aria-pressed={summoned}
+            style={{
+              ...monoSm,
+              background: summoned ? 'rgba(139,92,246,0.16)' : 'transparent',
+              border: `1px solid ${summoned ? 'rgba(139,92,246,0.55)' : 'rgba(255,255,255,0.14)'}`,
+              borderRadius: '8px',
+              color: summoned ? 'var(--brand-purple-hover)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              padding: '7px 10px',
+              transition: 'all 0.2s',
+            }}
+          >
+            Qareen
+          </button>
+          <span style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.12)', display: 'block' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
             <div style={{
               width: 26, height: 26, borderRadius: '50%', flexShrink: 0,

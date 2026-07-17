@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Montserrat, JetBrains_Mono, Instrument_Serif, Rubik } from 'next/font/google';
 import './globals.css';
+import { QareenPresence } from '@/components/qareen/QareenPresence';
 
 const montserrat = Montserrat({
   subsets: ['latin'],
@@ -38,7 +39,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${montserrat.variable} ${jetbrainsMono.variable} ${instrumentSerif.variable} ${rubik.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <QareenPresence />
+      </body>
     </html>
   );
 }

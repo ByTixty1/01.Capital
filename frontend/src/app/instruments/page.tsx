@@ -3,6 +3,7 @@ import { MarketingFeaturePage } from '@/components/MarketingFeaturePage';
 export default function InstrumentsPage() {
   return (
     <MarketingFeaturePage
+      ghostPrefix="instruments_page"
       badge="Instruments"
       headline={<>Every equity instrument,<br />modeled correctly</>}
       sub="From ordinary shares to convertible sukuk — model every instrument your company might issue. See real-time dilution impact before you commit to any round."

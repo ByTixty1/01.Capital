@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 
 const MetaballCanvas = dynamic(() => import('./MetaballCanvas'), { ssr: false });
 import { Logo } from '@/components/Logo';
+import { useQareenStore } from '@/lib/qareen/store';
 
 const NAV = [
   { href: '/', label: 'Overview' },
@@ -18,6 +19,8 @@ const NAV = [
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const summoned = useQareenStore((state) => state.summoned);
+  const setSummoned = useQareenStore((state) => state.setSummoned);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
@@ -56,12 +59,32 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <Link href="/login" style={{ fontSize: '13px', color: 'var(--text-secondary)', textDecoration: 'none', padding: '7px 16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 150ms ease' }}
+          {/* Qareen — summons in place on whichever page the user is already on (ADR-0010). */}
+          <button
+            type="button"
+            onClick={() => setSummoned(!summoned)}
+            data-on={summoned ? '1' : '0'}
+            aria-label={summoned ? 'Dismiss Qareen' : 'Open Qareen, the AI assistant'}
+            title="Qareen"
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 30, height: 30, borderRadius: '50%',
+              border: `1px solid ${summoned ? 'rgba(139,92,246,.5)' : 'rgba(255,255,255,.14)'}`,
+              background: summoned ? 'rgba(139,92,246,.15)' : 'rgba(255,255,255,.04)',
+              color: summoned ? 'var(--brand-purple-hover)' : 'var(--text-secondary)',
+              cursor: 'pointer', transition: 'all 150ms ease', flexShrink: 0,
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
+            </svg>
+          </button>
+          <Link data-ghost="nav_sign_in" href="/login" style={{ fontSize: '13px', color: 'var(--text-secondary)', textDecoration: 'none', padding: '7px 16px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', transition: 'all 150ms ease' }}
             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = 'var(--brand-purple)'; (e.currentTarget as HTMLAnchorElement).style.color = 'var(--brand-purple)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-secondary)'; }}>
             Sign in
           </Link>
-          <Link href="/register" style={{ fontSize: '13px', fontWeight: 500, color: '#fff', textDecoration: 'none', padding: '7px 16px', borderRadius: '6px', background: 'var(--brand-purple)', transition: 'opacity 150ms ease' }}
+          <Link data-ghost="nav_get_started" href="/register" style={{ fontSize: '13px', fontWeight: 500, color: '#fff', textDecoration: 'none', padding: '7px 16px', borderRadius: '6px', background: 'var(--brand-purple)', transition: 'opacity 150ms ease' }}
             onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.opacity = '1'; }}>
             Get started

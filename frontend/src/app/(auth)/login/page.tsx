@@ -41,16 +41,16 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} style={s.form}>
             <div style={s.field}>
               <label style={s.label}>Email address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+              <input data-ghost="login_email" type="email" value={email} onChange={e => setEmail(e.target.value)}
                 required autoComplete="email" placeholder="you@company.com" style={s.input} />
             </div>
             <div style={s.field}>
               <label style={s.label}>Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+              <input data-ghost="login_password" type="password" value={password} onChange={e => setPassword(e.target.value)}
                 required autoComplete="current-password" placeholder="••••••••" style={s.input} />
             </div>
             {error && <ErrorBox msg={error} />}
-            <button type="submit" disabled={loading} className="btn-primary" style={s.button}>
+            <button data-ghost="login_submit" type="submit" disabled={loading} className="btn-primary" style={s.button}>
               {loading ? <Spinner label="Signing in…" /> : 'Sign in'}
             </button>
           </form>

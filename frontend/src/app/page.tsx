@@ -4,9 +4,12 @@ import { PageBackground } from '@/components/PageBackground';
 import { useLandingEffects } from '@/hooks/useLandingEffects';
 import { LANDING_CSS } from './landing-styles';
 import { Logo } from '@/components/Logo';
+import { useQareenStore } from '@/lib/qareen/store';
 
 export default function LandingPage() {
   useLandingEffects();
+  const summoned = useQareenStore((s) => s.summoned);
+  const setSummoned = useQareenStore((s) => s.setSummoned);
 
   return (
     <>
@@ -44,7 +47,14 @@ export default function LandingPage() {
               <span className="lp-pair"><b id="lp-clk-ldn">—</b><span>LDN</span></span>
             </div>
             <div className="lp-nav-divider" />
-            <button className="lp-lang-btn" id="lp-lang-toggle" aria-label="Toggle language">
+            <button
+              type="button"
+              className="lp-lang-btn"
+              id="lp-lang-toggle"
+              data-ghost="nav_language_toggle"
+              aria-label="Toggle language"
+              aria-pressed="false"
+            >
               <span className="lp-lang-active" id="lp-lang-active-label">EN</span>
               <span className="lp-lang-sep">/</span>
               <span id="lp-lang-other-label">AR</span>
@@ -55,9 +65,22 @@ export default function LandingPage() {
                 <circle cx="6.5" cy="6.5" r="2" />
               </svg>
             </button>
+            {/* Qareen — summons in place on this page, see ADR-0010. */}
+            <button
+              type="button"
+              className="lp-lens-btn"
+              data-on={summoned ? '1' : '0'}
+              onClick={() => setSummoned(!summoned)}
+              aria-label={summoned ? 'Dismiss Qareen' : 'Open Qareen, the AI assistant'}
+              title="Qareen"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
+              </svg>
+            </button>
             <div className="lp-nav-divider" />
-            <a className="lp-nav-signin" href="/login">Sign in</a>
-            <a className="lp-nav-cta" href="/register">Get started</a>
+            <a className="lp-nav-signin" data-ghost="nav_sign_in" href="/login">Sign in</a>
+            <a className="lp-nav-cta" data-ghost="nav_get_started" href="/register">Get started</a>
           </div>
         </nav>
 
@@ -73,7 +96,7 @@ export default function LandingPage() {
 
         {/* Hero */}
         <section className="lp-hero" id="hero">
-          <div className="lp-headline">
+          <div className="lp-headline" data-ghost="hero_headline">
             <span className="lp-reveal lp-eyebrow" data-ar="إدارة الملكية · جدول الرسملة">
               <span className="lp-en">Equity management · Cap table</span><span className="lp-ar" />
             </span>
@@ -121,25 +144,25 @@ export default function LandingPage() {
               </div>
             </aside>
             <main className="lp-dash-main">
-              <div className="lp-dash-row lp-kpis">
-                <div className="lp-kpi lp-fade"><div className="lp-kpi-label">Authorized shares</div><div className="lp-kpi-value">10,000,000</div><div className="lp-kpi-delta"><span className="lp-pill">SJSC</span><span>Class A · ordinary</span></div></div>
-                <div className="lp-kpi lp-fade"><div className="lp-kpi-label">Issued &amp; outstanding</div><div className="lp-kpi-value">7,842,500</div><div className="lp-kpi-delta"><span className="lp-pill lp-up">+ 240,000</span><span>since Q1</span></div></div>
-                <div className="lp-kpi lp-fade"><div className="lp-kpi-label">Fully diluted</div><div className="lp-kpi-value">8,612,500</div><div className="lp-kpi-delta"><span>incl. ESOP &amp; convertibles</span></div></div>
-                <div className="lp-kpi lp-fade"><div className="lp-kpi-label">Last priced round</div><div className="lp-kpi-value">42.<span style={{ color: 'var(--text-secondary)' }}>10</span><span className="lp-unit">SAR / share</span></div><div className="lp-kpi-delta"><span>Series A · Mar 2026</span></div></div>
+              <div className="lp-dash-row lp-kpis" data-ghost="captable_kpis">
+                <div className="lp-kpi lp-fade" data-ghost="captable_authorized"><div className="lp-kpi-label">Authorized shares</div><div className="lp-kpi-value">10,000,000</div><div className="lp-kpi-delta"><span className="lp-pill">SJSC</span><span>Class A · ordinary</span></div></div>
+                <div className="lp-kpi lp-fade" data-ghost="captable_issued"><div className="lp-kpi-label">Issued &amp; outstanding</div><div className="lp-kpi-value">7,842,500</div><div className="lp-kpi-delta"><span className="lp-pill lp-up">+ 240,000</span><span>since Q1</span></div></div>
+                <div className="lp-kpi lp-fade" data-ghost="captable_diluted"><div className="lp-kpi-label">Fully diluted</div><div className="lp-kpi-value">8,612,500</div><div className="lp-kpi-delta"><span>incl. ESOP &amp; convertibles</span></div></div>
+                <div className="lp-kpi lp-fade" data-ghost="captable_last_round"><div className="lp-kpi-label">Last priced round</div><div className="lp-kpi-value">42.<span style={{ color: 'var(--text-secondary)' }}>10</span><span className="lp-unit">SAR / share</span></div><div className="lp-kpi-delta"><span>Series A · Mar 2026</span></div></div>
               </div>
               <div className="lp-dash-row lp-split">
-                <div className="lp-panel lp-fade">
+                <div className="lp-panel lp-fade" data-ghost="captable_ownership">
                   <div className="lp-panel-head">
                     <h3 className="lp-reveal" data-ar="الملكية"><span className="lp-en">Ownership</span><span className="lp-ar" /></h3>
                     <div className="lp-panel-meta">Fully diluted · SAR</div>
                   </div>
                   <div className="lp-panel-body">
                     <div className="lp-stack">
-                      <div className="lp-stack-bar"><div className="lp-who"><span className="lp-swatch" style={{ background: '#a78bfa' }} /><div>Founders<small>3 holders · ordinary</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '46%', background: '#a78bfa' }} /></div><div className="lp-pct">46.0%</div></div>
-                      <div className="lp-stack-bar"><div className="lp-who"><span className="lp-swatch" style={{ background: '#8b5cf6' }} /><div>Series A investors<small>4 holders · pref. A</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '22%', background: '#8b5cf6', animationDelay: '.1s' }} /></div><div className="lp-pct">22.0%</div></div>
-                      <div className="lp-stack-bar"><div className="lp-who"><span className="lp-swatch" style={{ background: '#6d4cc6' }} /><div>Seed investors<small>9 holders · SAFE / pref.</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '14%', background: '#6d4cc6', animationDelay: '.2s' }} /></div><div className="lp-pct">14.0%</div></div>
-                      <div className="lp-stack-bar"><div className="lp-who"><span className="lp-swatch" style={{ background: '#4d3692' }} /><div>ESOP pool<small>granted &amp; reserved</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '10%', background: '#4d3692', animationDelay: '.3s' }} /></div><div className="lp-pct">10.0%</div></div>
-                      <div className="lp-stack-bar"><div className="lp-who"><span className="lp-swatch" style={{ background: '#332661' }} /><div>Sukuk convertibles<small>2 instruments · pending</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '8%', background: '#332661', animationDelay: '.4s' }} /></div><div className="lp-pct">8.0%</div></div>
+                      <div className="lp-stack-bar" data-ghost="ownership_founders"><div className="lp-who"><span className="lp-swatch" style={{ background: '#a78bfa' }} /><div>Founders<small>3 holders · ordinary</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '46%', background: '#a78bfa' }} /></div><div className="lp-pct">46.0%</div></div>
+                      <div className="lp-stack-bar" data-ghost="ownership_series_a"><div className="lp-who"><span className="lp-swatch" style={{ background: '#8b5cf6' }} /><div>Series A investors<small>4 holders · pref. A</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '22%', background: '#8b5cf6', animationDelay: '.1s' }} /></div><div className="lp-pct">22.0%</div></div>
+                      <div className="lp-stack-bar" data-ghost="ownership_seed"><div className="lp-who"><span className="lp-swatch" style={{ background: '#6d4cc6' }} /><div>Seed investors<small>9 holders · SAFE / pref.</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '14%', background: '#6d4cc6', animationDelay: '.2s' }} /></div><div className="lp-pct">14.0%</div></div>
+                      <div className="lp-stack-bar" data-ghost="ownership_esop"><div className="lp-who"><span className="lp-swatch" style={{ background: '#4d3692' }} /><div>ESOP pool<small>granted &amp; reserved</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '10%', background: '#4d3692', animationDelay: '.3s' }} /></div><div className="lp-pct">10.0%</div></div>
+                      <div className="lp-stack-bar" data-ghost="ownership_sukuk"><div className="lp-who"><span className="lp-swatch" style={{ background: '#332661' }} /><div>Sukuk convertibles<small>2 instruments · pending</small></div></div><div className="lp-track"><div className="lp-fill" style={{ width: '8%', background: '#332661', animationDelay: '.4s' }} /></div><div className="lp-pct">8.0%</div></div>
                     </div>
                   </div>
                 </div>
@@ -159,16 +182,16 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
-              <div className="lp-panel lp-fade">
+              <div className="lp-panel lp-fade" data-ghost="captable_filings">
                 <div className="lp-panel-head">
                   <h3 className="lp-reveal" data-ar="الإفصاحات القادمة"><span className="lp-en">Upcoming filings</span><span className="lp-ar" /></h3>
                   <div className="lp-panel-meta">MoC · CMA · ZATCA</div>
                 </div>
                 <div className="lp-panel-body">
                   <div className="lp-filings">
-                    <div className="lp-filing lp-fade"><div className="lp-filing-date">31<small>May</small></div><div className="lp-filing-title">MoC Annual Return<small>Companies Law Art. 218 — board-signed return of share register</small></div><div className="lp-filing-due lp-warn">Due in 24 days</div></div>
-                    <div className="lp-filing lp-fade"><div className="lp-filing-date">15<small>Jun</small></div><div className="lp-filing-title">ZATCA — Zakat &amp; corporate tax<small>Q2 estimate · ledger figures auto-attached</small></div><div className="lp-filing-due">Due in 39 days</div></div>
-                    <div className="lp-filing lp-fade"><div className="lp-filing-date">02<small>Jul</small></div><div className="lp-filing-title">CMA — beneficial ownership disclosure<small>Triggered by Mar 2026 share issuance</small></div><div className="lp-filing-due">Due in 56 days</div></div>
+                    <div className="lp-filing lp-fade" data-ghost="filing_moc"><div className="lp-filing-date">31<small>May</small></div><div className="lp-filing-title">MoC Annual Return<small>Companies Law Art. 218 — board-signed return of share register</small></div><div className="lp-filing-due lp-warn">Due in 24 days</div></div>
+                    <div className="lp-filing lp-fade" data-ghost="filing_zatca"><div className="lp-filing-date">15<small>Jun</small></div><div className="lp-filing-title">ZATCA — Zakat &amp; corporate tax<small>Q2 estimate · ledger figures auto-attached</small></div><div className="lp-filing-due">Due in 39 days</div></div>
+                    <div className="lp-filing lp-fade" data-ghost="filing_cma"><div className="lp-filing-date">02<small>Jul</small></div><div className="lp-filing-title">CMA — beneficial ownership disclosure<small>Triggered by Mar 2026 share issuance</small></div><div className="lp-filing-due">Due in 56 days</div></div>
                   </div>
                 </div>
               </div>
@@ -177,7 +200,7 @@ export default function LandingPage() {
         </section>
 
         {/* ESOP */}
-        <section className="lp-bay" id="esop">
+        <section className="lp-bay" id="esop" data-ghost="esop_section">
           <div className="lp-bay-head lp-fade">
             <div className="lp-bay-num">03 / ESOP</div>
             <h2 className="lp-bay-title lp-reveal" data-ar="مواءمة الفريق دون إرباك السجل.">
@@ -192,7 +215,7 @@ export default function LandingPage() {
         </section>
 
         {/* Compliance */}
-        <section className="lp-bay" id="compliance">
+        <section className="lp-bay" id="compliance" data-ghost="compliance_section">
           <div className="lp-bay-head lp-fade">
             <div className="lp-bay-num">04 / Compliance</div>
             <h2 className="lp-bay-title lp-reveal" data-ar="الجوهر، لا الغلاف.">
@@ -207,7 +230,7 @@ export default function LandingPage() {
         </section>
 
         {/* Instruments */}
-        <section className="lp-bay" id="instruments">
+        <section className="lp-bay" id="instruments" data-ghost="instruments_section">
           <div className="lp-bay-head lp-fade">
             <div className="lp-bay-num">05 / Instruments</div>
             <h2 className="lp-bay-title lp-reveal" data-ar="صكوك، سيف، خيارات — بأصول.">
@@ -227,7 +250,7 @@ export default function LandingPage() {
             <div className="lp-cta-text lp-reveal" data-ar="أدر جدول ملكيتك كما يصوغه القانون.">
               <span className="lp-en">Run your cap table <em>the way the law writes it.</em></span><span className="lp-ar" />
             </div>
-            <a className="lp-cta-btn" href="/register">Get started <span className="lp-arrow" /></a>
+            <a className="lp-cta-btn" data-ghost="cta_button" href="/register">Get started <span className="lp-arrow" /></a>
           </div>
         </section>
 

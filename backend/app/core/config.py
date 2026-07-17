@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     resend_api_key: str = ""
     email_from: str = "01 Capital <noreply@01capital.app>"
 
+    # Qareen hackathon prototype (see ADR-0009) — narrow/optional, no DB access.
+    anthropic_api_key: str = ""
+
     # Rate limiting — disable only for local e2e runs where one IP registers
     # many users in quick succession; never disable in deployed environments.
     rate_limit_enabled: bool = True
