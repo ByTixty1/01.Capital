@@ -540,6 +540,16 @@ export const api = {
       request<{ mfa_enabled: boolean }>('/api/auth/mfa/disable', {
         method: 'POST', body: JSON.stringify({ code }),
       }),
+    devLogin: (email: string, password: string) =>
+      request<TokenResponse>('/api/auth/dev/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }, TokenResponseSchema),
+    devVerifyEmail: (email: string) =>
+      request<TokenResponse>('/api/auth/dev/verify-email', {
+        method: 'POST',
+        body: JSON.stringify({ email, otp: '000000' }),
+      }, TokenResponseSchema),
   },
 
   companies: {
