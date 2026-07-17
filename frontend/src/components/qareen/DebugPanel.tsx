@@ -38,7 +38,6 @@ export function DebugPanel() {
       if (e.key === 'r') void engine.retreatWorkerHand();
       if (e.key === 'f') engine.freeze();
       if (e.key === 'u') engine.unfreeze();
-      if (e.key === 'b') void engine.runBeat({ pose: 'two', tilt: 15, lean: null, emph: true, raise: false, drift: null, on_word: null });
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -63,7 +62,7 @@ export function DebugPanel() {
       className="glass-panel"
       style={{ position: 'fixed', top: 72, left: 24, zIndex: 70, padding: 16, width: 260, maxHeight: 'calc(100vh - 96px)', overflowY: 'auto', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 10 }}
     >
-      <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Motion debug (keys: g p h r f u b)</p>
+      <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Motion debug (keys: g p h r f u)</p>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {presentGhosts.map((id) => (
@@ -93,15 +92,6 @@ export function DebugPanel() {
         </button>
       </div>
 
-      <button
-        type="button"
-        data-testid="debug-beat"
-        className="btn-primary"
-        style={{ padding: '4px 8px', fontSize: 11 }}
-        onClick={() => void getMotionEngine()?.runBeat({ pose: 'two', tilt: 15, lean: null, emph: true, raise: false, drift: null, on_word: null })}
-      >
-        speaker beat
-      </button>
     </div>
   );
 }

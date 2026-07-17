@@ -48,6 +48,11 @@ export const GHOST_ELEMENT_IDS = [
   'login_email',
   'login_password',
   'login_submit',
+  // /register — credentials use the same browser-local safety boundary
+  'register_full_name',
+  'register_email',
+  'register_password',
+  'register_submit',
   // /cap-table
   'captable_page_headline',
   'captable_page_features',
@@ -111,6 +116,10 @@ export const GHOST_ROUTES: Partial<Record<GhostElementId, string>> = {
   login_email: '/login',
   login_password: '/login',
   login_submit: '/login',
+  register_full_name: '/register',
+  register_email: '/register',
+  register_password: '/register',
+  register_submit: '/register',
   captable_page_headline: '/cap-table',
   captable_page_features: '/cap-table',
   captable_page_cta: '/cap-table',

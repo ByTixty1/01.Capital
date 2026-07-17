@@ -7,8 +7,8 @@
 ## Purpose
 
 Qareen is an optional explanation layer for 01 Capital. A user can ask a
-question by typing or speaking; Qareen answers aloud while two animated hands
-point to the real product interface being described. It does not participate
+question by typing or speaking; Qareen answers aloud while one animated worker
+hand points to the real product interface being described. It does not participate
 in ownership calculations, legal rules, or the cap-table event log.
 
 The intended experience is:
@@ -21,7 +21,7 @@ The intended experience is:
 4. The backend streams short spoken lines with hand instructions.
 5. Text-to-speech returns audio and per-word timestamps.
 6. Qareen speaks each line while the worker hand navigates, scrolls, and points
-   at the relevant real element. The speaker hand gestures on designated words.
+   at the relevant real element.
 
 ## Runtime flow
 
@@ -76,8 +76,9 @@ Privacy and prompt-injection boundaries are applied before transmission:
   inputs, submits, and destructive actions remain visual-only unless their
   stable target is explicitly allowlisted.
 
-Login credentials use a separate browser-local path. On `/login`, a message
-containing an email and password is intercepted before conversation history or
+Account credentials use a separate browser-local path. On `/login` or
+`/register`, a message containing the required identity fields, email, and
+password is intercepted before conversation history or
 the Claude request is created. Qareen displays only a sanitized placeholder,
 fills the controlled React inputs through native input events, and never stores
 the values in Zustand/session storage. The submit button is not allowlisted;
@@ -85,6 +86,13 @@ the user must review the fields and press **Sign in** themselves. Incomplete
 credential-shaped messages are also kept local. Typed entry is recommended,
 because browser speech-recognition services may process microphone audio before
 Qareen receives a transcript.
+
+All other currently rendered text controls can accept a model-directed `type`
+move. The executor supports React-controlled and native `input`/`textarea`
+elements of type text, email, search, telephone, URL, and number. It dispatches
+native input events for every character, so page state and validation update as
+if the user typed. Passwords, file inputs, toggles, selects, disabled/read-only
+fields, and every submit/save/create control remain blocked.
 
 ## Voice behavior
 
@@ -119,7 +127,6 @@ Qareen receives a transcript.
 
 Every brain line may contain:
 
-- `beats[].on_word`: the zero-based spoken-word index for a speaker-hand pose.
 - `worker[].on_word`: the zero-based spoken-word index for worker movement.
 
 The TTS service supplies word offsets for every audio segment. The frontend
@@ -132,15 +139,14 @@ pressed before its marked word and is pressed afterward.
 
 ## Hand assets and movement
 
-The overlay uses the Tabler-style hand glyphs required by
-`QAREEN_MOTION_SPEC.md`: open, point, two fingers, three fingers, click/tap,
-and grab. They are local inline SVG paths, so pose swaps require no network or
-runtime icon package. Both hands retain the original 96 px wrist-anchored
-motion contract and procedural idle movement.
+The overlay uses a local Tabler-style hand glyph for the visible worker hand,
+so pose swaps require no network or runtime icon package. The left speaker
+hand is deliberately not rendered because its conversational movement was
+distracting. The wire schema still accepts legacy `beats`, but the production
+prompt emits an empty list for backward compatibility.
 
 The worker hand can navigate to another registered route, wait for the new DOM,
-scroll the target into view, glide to it, and show a cyan impact outline. The
-speaker hand performs expressive beats while Qareen talks.
+scroll the target into view, glide to it, and show a cyan impact outline.
 
 Guidance motion follows deterministic rules so identical instructions look and
 land consistently:

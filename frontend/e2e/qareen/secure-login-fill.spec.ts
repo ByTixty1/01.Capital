@@ -74,7 +74,7 @@ test('credentials stay local while the hand fills both real login fields', async
   expect(await fingertipDistanceTo(page, '[data-ghost="login_password"]')).toBeLessThanOrEqual(24);
 
   const transcript = await page.locator('[data-testid="qareen-presence"]').innerText();
-  expect(transcript).toContain('Login credentials provided securely.');
+  expect(transcript).toContain('Account credentials provided securely.');
   expect(transcript).not.toContain(email);
   expect(transcript).not.toContain(password);
   expect(brainCalls).toBe(0);

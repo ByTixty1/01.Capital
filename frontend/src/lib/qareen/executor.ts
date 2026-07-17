@@ -5,6 +5,7 @@ import { getMotionEngine } from './motion/engineRegistry';
 import { getQareenRouter } from './routerRegistry';
 import {
   activationControlForGhost,
+  queryGhost,
   resolveSpokenGhostCues,
   resolveSpokenGhostTarget,
   routeForGhost,
@@ -14,7 +15,7 @@ import { pulseGhostElement } from './motion/impactPulse';
 import { useQareenStore, type FormDraft } from './store';
 import { classifyApprovalPhrase } from './approvalBus';
 import { collectQareenPageContext } from './pageContext';
-import { parseLocalLoginRequest, setControlledInputValue, type LocalLoginRequest } from './localLogin';
+import { parseLocalCredentialRequest, setControlledTextValue, type LocalCredentialRequest } from './localLogin';
 import type { BrainLine, WorkerMove, Beat } from './types';
 
 /** Bumped on every new turn — lets a barge-in cut off a stale turn's
@@ -25,6 +26,19 @@ const FORM_FIELD_GHOST_IDS: readonly (keyof FormDraft)[] = ['field_name', 'field
 
 function ghostIdToFormField(target: string): keyof FormDraft | null {
   return (FORM_FIELD_GHOST_IDS as readonly string[]).includes(target) ? (target as keyof FormDraft) : null;
+}
+
+const MODEL_WRITABLE_INPUT_TYPES = new Set(['text', 'email', 'search', 'tel', 'url', 'number']);
+
+/** Passwords and non-text controls are never writable through model output.
+ * Passwords use the browser-local credential path below instead. */
+function modelWritableTextControl(element: HTMLElement): HTMLInputElement | HTMLTextAreaElement | null {
+  if (element instanceof HTMLTextAreaElement) {
+    return element.disabled || element.readOnly ? null : element;
+  }
+  if (!(element instanceof HTMLInputElement)) return null;
+  if (element.disabled || element.readOnly || !MODEL_WRITABLE_INPUT_TYPES.has(element.type)) return null;
+  return element;
 }
 
 /** The approval constitution, enforced in code (not just the prompt): a
@@ -174,6 +188,15 @@ async function dispatchWorkerMove(move: WorkerMove, approvalGranted: boolean): P
       break;
     case 'type': {
       if (!move.text) break;
+      const textControl = modelWritableTextControl(motionTarget);
+      if (textControl) {
+        let nextValue = '';
+        await engine.typeWorkerAt(textControl, move.text, (char) => {
+          nextValue += char;
+          setControlledTextValue(textControl, nextValue);
+        });
+        break;
+      }
       const field = ghostIdToFormField(move.target);
       if (field) useQareenStore.getState().setFormDraftField(field, '');
       await engine.typeWorkerAt(motionTarget, move.text, (char) => {
@@ -208,6 +231,13 @@ async function waitForSpokenWord(result: TtsResult | null, wordIndex: number | n
 function applyTypeMovesInTextMode(worker: WorkerMove[]): void {
   for (const move of worker) {
     if (move.move !== 'type' || !move.target || !move.text) continue;
+    const element = queryGhost(move.target);
+    const textControl = element ? modelWritableTextControl(element) : null;
+    if (textControl) {
+      setControlledTextValue(textControl, move.text);
+      textControl.focus({ preventScroll: true });
+      continue;
+    }
     const field = ghostIdToFormField(move.target);
     if (field) useQareenStore.getState().setFormDraftField(field, move.text);
   }
@@ -325,10 +355,10 @@ async function speakLocalLine(text: string, generation: number): Promise<void> {
   }
 }
 
-async function typeLocalLoginValue(input: HTMLInputElement, value: string): Promise<void> {
+async function typeLocalCredentialValue(input: HTMLInputElement, value: string): Promise<void> {
   const engine = getMotionEngine();
   if (!useQareenStore.getState().guideMode || !engine) {
-    setControlledInputValue(input, value);
+    setControlledTextValue(input, value);
     input.focus({ preventScroll: true });
     return;
   }
@@ -337,21 +367,25 @@ async function typeLocalLoginValue(input: HTMLInputElement, value: string): Prom
   let nextValue = '';
   await engine.typeWorkerAt(input, value, (character) => {
     nextValue += character;
-    setControlledInputValue(input, nextValue);
+    setControlledTextValue(input, nextValue);
   });
 }
 
 /** Fills login credentials entirely inside the browser. Neither the raw user
  * message nor either value reaches Claude, TTS, persisted Qareen state, or the
  * chat transcript. Submission remains a deliberate user action. */
-async function runLocalLoginRequest(request: LocalLoginRequest): Promise<void> {
+async function runLocalCredentialRequest(request: LocalCredentialRequest): Promise<void> {
   currentGeneration += 1;
   const generation = currentGeneration;
   stopAllAudio();
 
   const response = request.kind === 'complete'
-    ? 'I filled both fields locally. Review them, then press Sign in yourself.'
-    : 'Include both email and password in one message. I will keep them local.';
+    ? request.route === 'register'
+      ? 'I filled all account fields locally. Review them, then create the account yourself.'
+      : 'I filled both fields locally. Review them, then press Sign in yourself.'
+    : request.route === 'register'
+      ? 'Include full name, email, and password together. I will keep them local.'
+      : 'Include both email and password in one message. I will keep them local.';
   useQareenStore.getState().appendConversationEntry({
     id: makeEntryId(),
     role: 'qareen',
@@ -365,8 +399,10 @@ async function runLocalLoginRequest(request: LocalLoginRequest): Promise<void> {
     return;
   }
 
-  const emailInput = await waitForGhost('login_email', 1500);
-  const passwordInput = await waitForGhost('login_password', 1500);
+  const emailTarget = request.route === 'register' ? 'register_email' : 'login_email';
+  const passwordTarget = request.route === 'register' ? 'register_password' : 'login_password';
+  const emailInput = await waitForGhost(emailTarget, 1500);
+  const passwordInput = await waitForGhost(passwordTarget, 1500);
   if (!(emailInput instanceof HTMLInputElement) || !(passwordInput instanceof HTMLInputElement)) {
     useQareenStore.getState().appendConversationEntry({
       id: makeEntryId(),
@@ -378,27 +414,35 @@ async function runLocalLoginRequest(request: LocalLoginRequest): Promise<void> {
     return;
   }
 
-  await typeLocalLoginValue(emailInput, request.email);
-  if (generation === currentGeneration) await typeLocalLoginValue(passwordInput, request.password);
+  if (request.route === 'register') {
+    const nameInput = await waitForGhost('register_full_name', 1500);
+    if (!(nameInput instanceof HTMLInputElement)) {
+      await speech;
+      return;
+    }
+    await typeLocalCredentialValue(nameInput, request.fullName);
+  }
+  if (generation === currentGeneration) await typeLocalCredentialValue(emailInput, request.email);
+  if (generation === currentGeneration) await typeLocalCredentialValue(passwordInput, request.password);
   await speech;
 }
 
 /** Single entry point for typed and spoken user input. Credential-shaped
  * login messages are sanitized before anything is appended or transmitted. */
 export async function submitQareenUserInput(userMessage: string, interrupted = false): Promise<void> {
-  const localLoginRequest = typeof window !== 'undefined'
-    ? parseLocalLoginRequest(userMessage, window.location.pathname)
+  const localCredentialRequest = typeof window !== 'undefined'
+    ? parseLocalCredentialRequest(userMessage, window.location.pathname)
     : null;
 
   useQareenStore.getState().appendConversationEntry({
     id: `user-${Date.now()}`,
     role: 'user',
-    text: localLoginRequest ? 'Login credentials provided securely.' : userMessage,
+    text: localCredentialRequest ? 'Account credentials provided securely.' : userMessage,
     timestamp: Date.now(),
   });
 
-  if (localLoginRequest) {
-    await runLocalLoginRequest(localLoginRequest);
+  if (localCredentialRequest) {
+    await runLocalCredentialRequest(localCredentialRequest);
     return;
   }
   await runQareenTurn(userMessage, interrupted);

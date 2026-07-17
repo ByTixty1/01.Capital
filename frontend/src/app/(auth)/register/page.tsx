@@ -75,6 +75,7 @@ export default function RegisterPage() {
           <div style={styles.field}>
             <label style={styles.label}>Full name</label>
             <input
+              data-ghost="register_full_name"
               type="text"
               value={fullName}
               onChange={e => setFullName(e.target.value)}
@@ -87,6 +88,7 @@ export default function RegisterPage() {
           <div style={styles.field}>
             <label style={styles.label}>Email address</label>
             <input
+              data-ghost="register_email"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -100,6 +102,7 @@ export default function RegisterPage() {
           <div style={styles.field}>
             <label style={styles.label}>Password</label>
             <input
+              data-ghost="register_password"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -122,7 +125,7 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <button type="submit" disabled={loading} className="btn-primary" style={styles.button}>
+            <button data-ghost="register_submit" type="submit" disabled={loading} className="btn-primary" style={styles.button}>
               {loading ? (
                 <span style={styles.loadingSpinner}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>

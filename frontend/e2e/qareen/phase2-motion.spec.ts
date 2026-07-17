@@ -58,22 +58,9 @@ test('freeze halts all procedural motion; unfreeze resumes it', async ({ page })
   expect(u1).not.toBe(u2);
 });
 
-test('speaker beat swaps pose and produces rotation', async ({ page }) => {
+test('left speaker hand is not rendered', async ({ page }) => {
   await summonQareen(page);
-  const speaker = page.getByTestId('speaker-hand');
-  await page.getByTestId('debug-beat').click();
-  await expect.poll(async () => {
-    const transform = await speaker.evaluate((el) => (el as HTMLElement).style.transform);
-    const match = transform.match(/rotateZ\((-?\d+(?:\.\d+)?)deg\)/);
-    return Number(match?.[1] ?? 0);
-  }, { timeout: 1_000, intervals: [20] }).toBeGreaterThan(5);
-  const rotateZ = await speaker.evaluate((el) => {
-    const match = (el as HTMLElement).style.transform.match(/rotateZ\((-?\d+(?:\.\d+)?)deg\)/);
-    return Number(match?.[1] ?? 0);
-  });
-  // The beat tweens toward 15deg over 260ms ('out' easing, no overshoot),
-  // but idle wobble (±2.2deg, see procedural.ts's speakerIdleRot) keeps
-  // layering on top the whole time — assert a beat clearly fired rather
-  // than pinning an exact value that idle drift can push outside.
-  expect(rotateZ).toBeLessThan(18);
+  await expect(page.getByTestId('speaker-hand')).toHaveCount(0);
+  await expect(page.getByTestId('speaker-hand-anchor')).toHaveCount(0);
+  await expect(page.getByTestId('worker-hand')).toBeVisible();
 });

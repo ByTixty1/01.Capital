@@ -37,7 +37,6 @@ export function QareenOverlay() {
   }, []);
 
   const workerOpacity = usePoseFadeOpacity(engine.workerPose);
-  const speakerOpacity = usePoseFadeOpacity(engine.speakerPose);
 
   return (
     <div
@@ -92,37 +91,6 @@ export function QareenOverlay() {
         </div>
       </div>
 
-      <div
-        data-testid="speaker-hand-anchor"
-        style={{ position: 'absolute', left: 0, top: 0, transform: engine.speaker.positionTransform, transformStyle: 'preserve-3d' }}
-      >
-        <div
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: -30,
-            top: 44,
-            width: 60,
-            height: 16,
-            borderRadius: '50%',
-            background: 'radial-gradient(ellipse, rgba(0,0,0,0.4), transparent 70%)',
-            opacity: engine.speaker.shadowOpacity,
-            transform: engine.speaker.shadowTransform,
-          }}
-        />
-        <div
-          data-testid="speaker-hand"
-          style={{
-            transform: engine.speaker.handTransform,
-            transformStyle: 'preserve-3d',
-            opacity: speakerOpacity,
-            transition: 'opacity 110ms ease',
-            transformOrigin: '48px 90px',
-          }}
-        >
-          <HandGlyph pose={engine.speakerPose} mirrored />
-        </div>
-      </div>
     </div>
   );
 }
