@@ -39,7 +39,7 @@ AudioContext.prototype.createBufferSource = function () {
 };
 const nativeMediaPlay = HTMLMediaElement.prototype.play;
 HTMLMediaElement.prototype.play = function () {
-  window.__qareenMediaPlays.push({ srcLength: this.src.length, muted: this.muted, volume: this.volume });
+  window.__qareenMediaPlays.push({ srcLength: this.src.length, muted: this.muted, volume: this.volume, loop: this.loop });
   return nativeMediaPlay.call(this);
 };
 `;
@@ -195,7 +195,7 @@ test('two spoken facts visit both exact rows and finish on the second', async ({
   expect(await fingertipDistanceTo(page, 'ownership_series_a')).toBeLessThanOrEqual(24);
 });
 
-test('typed TTS starts an unmuted full-volume media element after the delayed response', async ({ page }) => {
+test('typed TTS repairs a stale silent loop then plays audible media', async ({ page }) => {
   await page.addInitScript(AUDIO_TRACKING_SCRIPT);
   await page.route('**/api/backend/api/qareen/brain/stream', async (route: Route) => {
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -218,6 +218,13 @@ test('typed TTS starts an unmuted full-volume media element after the delayed re
   });
 
   await page.goto('/');
+  await page.evaluate(() => {
+    const staleAudio = new Audio();
+    staleAudio.dataset.qareenAudio = 'true';
+    staleAudio.dataset.qareenPrimeHold = 'true';
+    staleAudio.loop = true;
+    document.body.appendChild(staleAudio);
+  });
   await page.getByLabel(/Open Qareen/i).click();
   await page.getByPlaceholder('Type a message').fill('talk to me');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
@@ -225,10 +232,105 @@ test('typed TTS starts an unmuted full-volume media element after the delayed re
   await expect(page.getByText('Voice is working.')).toBeVisible();
   await expect
     .poll(async () => page.evaluate(() => {
-      const plays = (window as unknown as { __qareenMediaPlays: { srcLength: number; muted: boolean; volume: number }[] }).__qareenMediaPlays;
-      return plays.some((play) => play.srcLength > 1_000 && !play.muted && play.volume === 1);
+      const plays = (window as unknown as {
+        __qareenMediaPlays: { srcLength: number; muted: boolean; volume: number; loop: boolean }[];
+      }).__qareenMediaPlays;
+      const prime = plays.find((play) => play.srcLength < 1_000);
+      const speech = plays.find((play) => play.srcLength > 1_000);
+      return Boolean(
+        prime && !prime.loop
+        && speech && !speech.loop && !speech.muted && speech.volume === 1
+      );
     }), { timeout: 4_000 })
     .toBe(true);
+  await expect(page.locator('audio[data-qareen-audio="true"]')).toHaveCount(1);
+  await expect(page.getByTestId('voice-output-state')).toHaveAttribute('data-state', 'idle');
+});
+
+test('a transient TTS failure retries once and still speaks', async ({ page }) => {
+  let ttsRequests = 0;
+  await page.route('**/api/backend/api/qareen/brain/stream', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: 'event: line\ndata: {"say":"Voice recovered.","beats":[],"worker":[]}\n\nevent: done\ndata: {"intent":"knowledge","needs_approval":false,"prepared_action":null}\n\n',
+    });
+  });
+  await page.route('**/api/backend/api/qareen/tts', async (route: Route) => {
+    ttsRequests += 1;
+    if (ttsRequests === 1) {
+      await route.fulfill({ status: 503, body: 'temporarily unavailable' });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        segments: [{ audio_base64: silentWavBase64(400), word_timings: [] }],
+        pause_ms: 0,
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel(/Open Qareen/i).click();
+  await page.getByPlaceholder('Type a message').fill('try the voice');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+
+  await expect(page.getByText('Voice recovered.')).toBeVisible();
+  await expect.poll(() => ttsRequests).toBe(2);
+  await expect(page.getByTestId('voice-output-state')).toHaveAttribute('data-state', 'idle');
+});
+
+test('Web Audio speaks when Safari-style media playback rejects', async ({ page }) => {
+  await page.addInitScript(`
+    window.__qareenFallbackStarts = [];
+    const nativeCreateBufferSource = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function () {
+      const source = nativeCreateBufferSource.call(this);
+      const nativeStart = source.start.bind(source);
+      source.start = function (...args) {
+        window.__qareenFallbackStarts.push(source.buffer ? source.buffer.duration : 0);
+        return nativeStart(...args);
+      };
+      return source;
+    };
+    const nativeMediaPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      if (this.src.length > 1000) {
+        return Promise.reject(new DOMException('simulated Safari rejection', 'NotAllowedError'));
+      }
+      return nativeMediaPlay.call(this);
+    };
+  `);
+  await page.route('**/api/backend/api/qareen/brain/stream', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: 'event: line\ndata: {"say":"Fallback voice works.","beats":[],"worker":[]}\n\nevent: done\ndata: {"intent":"knowledge","needs_approval":false,"prepared_action":null}\n\n',
+    });
+  });
+  await page.route('**/api/backend/api/qareen/tts', async (route: Route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        segments: [{ audio_base64: silentWavBase64(400), word_timings: [] }],
+        pause_ms: 0,
+      }),
+    });
+  });
+
+  await page.goto('/');
+  await page.getByLabel(/Open Qareen/i).click();
+  await page.getByPlaceholder('Type a message').fill('test fallback');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+
+  await expect(page.getByText('Fallback voice works.')).toBeVisible();
+  await expect.poll(async () => page.evaluate(() => (
+    (window as unknown as { __qareenFallbackStarts: number[] }).__qareenFallbackStarts
+      .some((duration) => duration > 0.2)
+  ))).toBe(true);
   await expect(page.getByTestId('voice-output-state')).toHaveAttribute('data-state', 'idle');
 });
 

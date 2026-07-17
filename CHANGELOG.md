@@ -30,6 +30,10 @@ All notable changes to this project are recorded here. We follow [Keep a Changel
 
 ### Fixed
 
+- Stabilized intermittent Qareen speech in Safari by holding Web Audio open
+  during AI/TTS latency, priming media without a silent loop, retaining Web
+  Audio fallback, and retrying one transient, empty, timed-out, or undecodable
+  TTS response.
 - Changed Qareen voice input to explicit, pause-safe dictation. Recognition now
   writes into the chat composer, reopens after browser endpointing, and sends
   only when the user presses Send.

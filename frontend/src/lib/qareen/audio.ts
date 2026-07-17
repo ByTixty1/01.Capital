@@ -8,7 +8,10 @@
 let audioCtx: AudioContext | null = null;
 let mediaElement: HTMLAudioElement | null = null;
 let cancelActiveMedia: (() => void) | null = null;
+let primeHoldSource: AudioBufferSourceNode | null = null;
+let primeHoldTimer: ReturnType<typeof setTimeout> | null = null;
 const UNLOCK_SILENCE = 'data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQIAAAAAAA==';
+const PRIME_HOLD_MS = 30_000;
 
 export function getAudioContext(): AudioContext {
   if (!audioCtx) {
@@ -19,15 +22,42 @@ export function getAudioContext(): AudioContext {
 
 function getMediaElement(): HTMLAudioElement {
   if (!mediaElement) {
-    mediaElement = new Audio();
+    // Reclaim the singleton after a Next.js hot reload. This also repairs an
+    // element left looping by an older Qareen bundle without requiring the
+    // user to close the tab.
+    mediaElement = document.querySelector<HTMLAudioElement>('audio[data-qareen-audio="true"]') ?? new Audio();
     mediaElement.preload = 'auto';
     mediaElement.volume = 1;
+    mediaElement.loop = false;
+    delete mediaElement.dataset.qareenPrimeHold;
     mediaElement.setAttribute('playsinline', '');
     mediaElement.dataset.qareenAudio = 'true';
     mediaElement.style.display = 'none';
-    document.body.appendChild(mediaElement);
+    if (!mediaElement.isConnected) document.body.appendChild(mediaElement);
   }
   return mediaElement;
+}
+
+function releasePrimeHold(): void {
+  if (primeHoldTimer) {
+    clearTimeout(primeHoldTimer);
+    primeHoldTimer = null;
+  }
+
+  if (primeHoldSource) {
+    try {
+      primeHoldSource.stop();
+    } catch {
+      // The hold may already have been stopped by the browser.
+    }
+    primeHoldSource = null;
+  }
+
+  if (mediaElement) {
+    mediaElement.loop = false;
+    delete mediaElement.dataset.qareenPrimeHold;
+  }
+
 }
 
 /**
@@ -36,17 +66,23 @@ function getMediaElement(): HTMLAudioElement {
  * input surface, before the brain/TTS network round trips begin.
  */
 export function primeAudioPlayback(): boolean {
+  releasePrimeHold();
   let primed = false;
   try {
     const ctx = getAudioContext();
     if (ctx.state === 'suspended') void ctx.resume();
 
-    // A one-sample silent source completes the unlock on browsers that require
-    // an actual start() call during the user gesture (not merely resume()).
+    // Keep a zero-volume source running across the brain/TTS network delay.
+    // Safari can suspend a context again after a one-sample unlock finishes.
     const source = ctx.createBufferSource();
     source.buffer = ctx.createBuffer(1, 1, 22_050);
-    source.connect(ctx.destination);
+    source.loop = true;
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    source.connect(gain);
+    gain.connect(ctx.destination);
     source.start();
+    primeHoldSource = source;
     primed = true;
   } catch {
     // The native media path below may still be available.
@@ -54,12 +90,20 @@ export function primeAudioPlayback(): boolean {
 
   try {
     const audio = getMediaElement();
+    // Do not loop the silent media element. Safari can keep the old silent
+    // decoder attached when a looping data URL is replaced, reporting
+    // `play()` success while producing no audible speech.
+    audio.loop = false;
     audio.src = UNLOCK_SILENCE;
     audio.currentTime = 0;
     void audio.play().catch(() => undefined);
     primed = true;
   } catch {
     // Typed chat must still work on a browser/device without audio output.
+  }
+
+  if (primed) {
+    primeHoldTimer = setTimeout(releasePrimeHold, PRIME_HOLD_MS);
   }
 
   return primed;
@@ -94,6 +138,9 @@ const activeSources = new Set<AudioBufferSourceNode>();
 export function playEncodedAudioAsync(base64: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const audio = getMediaElement();
+    // Stop only the zero-gain Web Audio hold. The media element's one-shot
+    // prime has already ended and is safe to replace with real speech.
+    releasePrimeHold();
     cancelActiveMedia?.();
 
     let settled = false;
@@ -145,6 +192,7 @@ export function playAudioBuffer(buffer: AudioBuffer, onEnded?: () => void): Audi
 
 /** Barge-in support: stop whatever Qareen is currently saying, right now. */
 export function stopAllAudio(): void {
+  releasePrimeHold();
   cancelActiveMedia?.();
   for (const source of activeSources) {
     try {

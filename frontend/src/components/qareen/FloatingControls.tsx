@@ -56,6 +56,9 @@ export function FloatingControls() {
           justifyContent: 'center',
         }}
         onClick={() => {
+          // Starting dictation is a barge-in. Stop old output first so it does
+          // not immediately release the fresh Safari playback hold below.
+          if (!micMasterOn) interruptQareenOutput();
           if (!primeAudioPlayback()) {
             useQareenStore.getState().setVoiceOutputState('unavailable');
           }
@@ -66,7 +69,6 @@ export function FloatingControls() {
             // click, preserving Safari's user-gesture requirement.
             setTimeout(() => submitQareenComposerDraft(), 0);
           } else {
-            interruptQareenOutput();
             setMicMasterOn(true);
           }
         }}

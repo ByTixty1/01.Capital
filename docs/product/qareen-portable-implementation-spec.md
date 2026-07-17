@@ -247,6 +247,8 @@ Use the TTS engine's word-boundary events. Edge TTS offsets are reported in 100-
 - Reuse one unmuted, full-volume audio element with `playsinline`.
 - Also support decoded Web Audio playback as a fallback and timing source.
 - Prime both playback paths synchronously inside the user's Send, microphone, or Space-key gesture before waiting for a network request.
+- Do not end the Web Audio prime immediately. Keep a zero-gain Web Audio source alive through the AI/TTS network delay, release it when real speech begins, and apply a bounded safety timeout (30 seconds in the reference implementation). Prime the reusable media element once, but do not loop its silent clip: Safari can retain the silent decoder when a looping data URL is replaced and report successful playback without audible speech.
+- Give each TTS attempt a bounded timeout (12 seconds in the reference implementation) and retry one transient request, empty payload, or decode failure after a short delay. Never retry indefinitely.
 - Expose visible states: `Voice ready`, `Speaking`, and `Voice unavailable`.
 - A TTS error must not cancel hand motion or remove the written answer.
 
@@ -865,3 +867,999 @@ A Qareen port is ready only when:
 - Setup, required environment variables, unsupported areas, and remaining risks are documented for that product.
 
 If any of these are missing, describe the port as partial rather than production-ready.
+
+## 26. Reference Starter Implementation
+
+This section contains concrete code that a receiving developer or coding agent can use as a starting point. It is intentionally split into shared core code and product-owned adapter code.
+
+The examples assume TypeScript on the frontend and FastAPI on the backend because that is the tested Capital reference stack. A receiving product may translate them to another framework, but it must preserve the contracts and safety checks.
+
+### 26.1 Shared frontend contracts
+
+Create `qareen/contracts.ts`:
+
+```ts
+export type BrainIntent =
+  | 'explain'
+  | 'howto'
+  | 'delegate'
+  | 'knowledge'
+  | 'bad_news'
+  | 'good_news'
+  | 'approval';
+
+export type HandPose =
+  | 'open'
+  | 'point'
+  | 'two'
+  | 'three'
+  | 'pinch'
+  | 'fist'
+  | 'grab'
+  | 'tap'
+  | 'relax'
+  | 'grip_wrist';
+
+export type WorkerMoveType =
+  | 'glide'
+  | 'press'
+  | 'type'
+  | 'circle'
+  | 'retreat'
+  | 'home';
+
+export interface WorkerMove {
+  move: WorkerMoveType;
+  target: string | null;
+  text: string | null;
+  on_word: number | null;
+}
+
+export interface BrainLine {
+  say: string;
+  beats: [];
+  worker: WorkerMove[];
+}
+
+export interface BrainResponse {
+  intent: BrainIntent;
+  lines: BrainLine[];
+  needs_approval: boolean;
+  prepared_action: string | null;
+}
+
+export interface PageElementContext {
+  target_id: string;
+  role: string;
+  label: string;
+  tag: string;
+  interactive: boolean;
+  action: string;
+  href: string | null;
+  position: string;
+  x_percent: number;
+  y_percent: number;
+  appearance: string;
+  disabled: boolean;
+  current: boolean;
+}
+
+export interface QareenPageContext {
+  pathname: string;
+  title: string;
+  viewport: { width: number; height: number; scroll_y: number };
+  elements: PageElementContext[];
+}
+
+export interface WordTiming {
+  word: string;
+  ms: number;
+}
+
+export interface TtsSegmentWire {
+  audio_base64: string;
+  word_timings: WordTiming[];
+}
+
+export interface TtsResponseWire {
+  segments: TtsSegmentWire[];
+  pause_ms: number;
+}
+```
+
+### 26.2 Product adapter
+
+Create one adapter in the receiving product. This is the main file that must not be copied blindly from Capital.
+
+```ts
+import type { WorkerMove } from './contracts';
+
+export type TargetRole = 'button' | 'link' | 'input' | 'heading' | 'region';
+
+export interface QareenTarget {
+  id: string;
+  routes: string[];
+  description: string;
+  expectedRole: TargetRole;
+  action?: string;
+  tenantAware?: boolean;
+}
+
+export interface ActionDecision {
+  allowed: boolean;
+  requiresApproval: boolean;
+  reason?: string;
+}
+
+export interface QareenProductAdapter {
+  productId: 'capital' | 'automate' | 'manager' | 'hr';
+  productName: string;
+  targets: readonly QareenTarget[];
+  privateContextSelectors: readonly string[];
+
+  routeContext(): {
+    pathname: string;
+    tenantId?: string;
+    locale: string;
+    authenticated: boolean;
+    permissions: string[];
+  };
+
+  routeForTarget(targetId: string): string | null;
+  correctTarget(spokenText: string, proposedTarget: string | null): string | null;
+  actionPolicy(move: WorkerMove): ActionDecision;
+  verifiedKnowledge(): string;
+}
+
+export function targetById(
+  adapter: QareenProductAdapter,
+  targetId: string,
+): QareenTarget | null {
+  return adapter.targets.find((target) => target.id === targetId) ?? null;
+}
+```
+
+Example adapter shape for Manager. The values must be verified against Manager's current code before use:
+
+```ts
+import type { QareenProductAdapter } from './product-adapter';
+
+export const managerQareenAdapter: QareenProductAdapter = {
+  productId: 'manager',
+  productName: 'ZeroOne Manager',
+  targets: [
+    {
+      id: 'projects_create',
+      routes: ['/projects'],
+      description: 'Opens the new-project form without submitting it',
+      expectedRole: 'button',
+      action: 'open-project-form',
+    },
+    {
+      id: 'projects_active',
+      routes: ['/dashboard', '/projects'],
+      description: 'Shows active projects',
+      expectedRole: 'region',
+    },
+  ],
+  privateContextSelectors: ['[data-private-project-row]', '[data-customer-message]'],
+
+  routeContext: () => ({
+    pathname: window.location.pathname,
+    locale: document.documentElement.lang || 'en',
+    authenticated: Boolean(document.querySelector('[data-authenticated="true"]')),
+    permissions: [], // Populate from the real authenticated permission source.
+  }),
+
+  routeForTarget: (targetId) => {
+    if (targetId === 'projects_create' || targetId === 'projects_active') return '/projects';
+    return null;
+  },
+
+  correctTarget: (spokenText, proposedTarget) => {
+    if (/create|new project/i.test(spokenText)) return 'projects_create';
+    if (/active projects?/i.test(spokenText)) return 'projects_active';
+    return proposedTarget;
+  },
+
+  actionPolicy: (move) => {
+    if (move.move !== 'press') {
+      return { allowed: true, requiresApproval: false };
+    }
+    if (move.target === 'projects_create') {
+      return { allowed: true, requiresApproval: false };
+    }
+    return {
+      allowed: false,
+      requiresApproval: false,
+      reason: 'Press target is not in the product allowlist.',
+    };
+  },
+
+  verifiedKnowledge: () => [
+    'Manager organizes projects, tasks, owners, statuses, and deadlines.',
+    'Never claim a task was created unless the real API confirms it.',
+  ].join('\n'),
+};
+```
+
+The empty permission array above is a deliberate integration boundary, not a production default. Replace it with the receiving application's authenticated permission source before enabling protected actions.
+
+### 26.3 Stable target markup and collection
+
+Tag important controls directly:
+
+```tsx
+<button
+  type="button"
+  data-qareen-target="projects_create"
+  onClick={openCreateProjectForm}
+>
+  Create project
+</button>
+```
+
+Use this compact collector as a starting point. It excludes Qareen's own interface, private regions, invisible controls, and all field values.
+
+```ts
+import type { PageElementContext, QareenPageContext } from './contracts';
+import type { QareenProductAdapter } from './product-adapter';
+
+const CANDIDATES = [
+  '[data-qareen-target]',
+  '[data-ghost]', // Capital compatibility alias.
+  'a[href]',
+  'button',
+  'input:not([type="hidden"])',
+  'select',
+  'textarea',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="tab"]',
+  'h1',
+  'h2',
+  'h3',
+].join(',');
+
+function clean(value: string | null | undefined, max = 140): string {
+  return (value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function visible(element: HTMLElement): boolean {
+  const style = getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  return style.display !== 'none'
+    && style.visibility !== 'hidden'
+    && style.opacity !== '0'
+    && rect.width > 0
+    && rect.height > 0;
+}
+
+function roleFor(element: HTMLElement): string {
+  const explicit = element.getAttribute('role');
+  if (explicit) return explicit;
+  if (element instanceof HTMLAnchorElement) return 'link';
+  if (element instanceof HTMLButtonElement) return 'button';
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) return 'textbox';
+  if (element instanceof HTMLSelectElement) return 'combobox';
+  if (/^H[1-6]$/.test(element.tagName)) return 'heading';
+  return 'region';
+}
+
+function labelFor(element: HTMLElement): string {
+  const aria = clean(element.getAttribute('aria-label'));
+  if (aria) return aria;
+
+  if (
+    element instanceof HTMLInputElement
+    || element instanceof HTMLTextAreaElement
+    || element instanceof HTMLSelectElement
+  ) {
+    const labels = Array.from(element.labels ?? [])
+      .map((label) => clean(label.textContent))
+      .filter(Boolean);
+    if (labels.length > 0) return labels.join(' / ').slice(0, 140);
+    return clean(element.getAttribute('placeholder'));
+  }
+
+  return clean(element.textContent || element.getAttribute('title'));
+}
+
+function slug(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 42) || 'unnamed';
+}
+
+function isPrivate(element: HTMLElement, adapter: QareenProductAdapter): boolean {
+  return adapter.privateContextSelectors.some((selector) => element.closest(selector));
+}
+
+export function collectPageContext(adapter: QareenProductAdapter): QareenPageContext {
+  const result: PageElementContext[] = [];
+  const used = new Map<string, number>();
+
+  for (const element of document.querySelectorAll<HTMLElement>(CANDIDATES)) {
+    if (result.length >= 120) break;
+    if (element.closest('[data-qareen-root]')) continue;
+    if (isPrivate(element, adapter) || !visible(element)) continue;
+
+    const role = roleFor(element);
+    const label = labelFor(element);
+    if (!label) continue;
+
+    const stable = element.dataset.qareenTarget || element.dataset.ghost;
+    const base = `page_${slug(role)}_${slug(label)}`;
+    const count = (used.get(base) ?? 0) + 1;
+    used.set(base, count);
+    const targetId = stable || (count === 1 ? base : `${base}_${count}`);
+    const rect = element.getBoundingClientRect();
+
+    // Never read element.value here.
+    result.push({
+      target_id: targetId,
+      role,
+      label,
+      tag: element.tagName.toLowerCase(),
+      interactive: ['button', 'link', 'textbox', 'combobox', 'tab'].includes(role),
+      action: element instanceof HTMLAnchorElement ? 'navigate' : role === 'button' ? 'button' : 'explain',
+      href: element instanceof HTMLAnchorElement ? element.getAttribute('href') : null,
+      position: rect.top < innerHeight / 2 ? 'upper viewport' : 'lower viewport',
+      x_percent: Math.round(((rect.left + rect.width / 2) / innerWidth) * 100),
+      y_percent: Math.round(((rect.top + rect.height / 2) / innerHeight) * 100),
+      appearance: 'Use computed color-name extraction when the model needs appearance.',
+      disabled: 'disabled' in element && Boolean((element as HTMLButtonElement).disabled),
+      current: element.getAttribute('aria-current') === 'page',
+    });
+  }
+
+  return {
+    pathname: location.pathname,
+    title: document.title,
+    viewport: { width: innerWidth, height: innerHeight, scroll_y: Math.round(scrollY) },
+    elements: result,
+  };
+}
+```
+
+Mount the Qareen UI using the exclusion marker used above:
+
+```tsx
+export function QareenRoot() {
+  return (
+    <div data-qareen-root>
+      <HandOverlay />
+      <ChatPanel />
+      <FloatingControls />
+    </div>
+  );
+}
+```
+
+### 26.4 Hand glyph and calibrated overlay
+
+The following is the tested single-hand identity asset. It has no runtime icon dependency.
+
+```tsx
+import type { HandPose } from './contracts';
+
+type HandPath = readonly string[];
+
+const OPEN_PATHS: HandPath = [
+  'M8 13v-7.5a1.5 1.5 0 0 1 3 0v6.5',
+  'M11 5.5v-2a1.5 1.5 0 1 1 3 0v8.5',
+  'M14 5.5a1.5 1.5 0 0 1 3 0v6.5',
+  'M17 7.5a1.5 1.5 0 0 1 3 0v8.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7l-.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47',
+];
+
+const POINT_PATHS: HandPath = [
+  'M8 13v-8.5a1.5 1.5 0 0 1 3 0v7.5',
+  'M11 11.5v-2a1.5 1.5 0 1 1 3 0v2.5',
+  'M14 10.5a1.5 1.5 0 0 1 3 0v1.5',
+  'M17 11.5a1.5 1.5 0 0 1 3 0v4.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7l-.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47',
+];
+
+const TWO_PATHS: HandPath = [
+  'M8 13v-8.5a1.5 1.5 0 0 1 3 0v7.5',
+  'M17 11.5a1.5 1.5 0 0 1 3 0v4.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7l-.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47',
+  'M14 10.5a1.5 1.5 0 0 1 3 0v1.5',
+  'M11 5.5v-2a1.5 1.5 0 1 1 3 0v8.5',
+];
+
+const THREE_PATHS: HandPath = [
+  'M8 13v-8.5a1.5 1.5 0 0 1 3 0v7.5',
+  'M17 11.5a1.5 1.5 0 0 1 3 0v4.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7l-.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47',
+  'M11 5.5v-2a1.5 1.5 0 1 1 3 0v8.5',
+  'M14 5.5a1.5 1.5 0 0 1 3 0v6.5',
+];
+
+const GRAB_PATHS: HandPath = [
+  'M8 11v-3.5a1.5 1.5 0 0 1 3 0v2.5',
+  'M11 9.5v-3a1.5 1.5 0 0 1 3 0v3.5',
+  'M14 7.5a1.5 1.5 0 0 1 3 0v2.5',
+  'M17 9.5a1.5 1.5 0 0 1 3 0v4.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7l-.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47',
+];
+
+const CLICK_ACCENTS: HandPath = ['M5 3l-1 -1', 'M4 7h-1', 'M14 3l1 -1', 'M15 6h1'];
+
+const POSE_PATHS: Record<HandPose, HandPath> = {
+  open: OPEN_PATHS,
+  point: POINT_PATHS,
+  two: TWO_PATHS,
+  three: THREE_PATHS,
+  pinch: [...POINT_PATHS, ...CLICK_ACCENTS],
+  fist: GRAB_PATHS,
+  grab: GRAB_PATHS,
+  tap: [...POINT_PATHS, ...CLICK_ACCENTS],
+  relax: OPEN_PATHS,
+  grip_wrist: GRAB_PATHS,
+};
+
+export function HandGlyph({ pose, size = 96 }: { pose: HandPose; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#ddd8ce"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      style={{
+        display: 'block',
+        overflow: 'visible',
+        filter: 'drop-shadow(0 3px 2px rgba(0,0,0,.45)) drop-shadow(0 0 6px rgba(221,216,206,.16))',
+      }}
+    >
+      {POSE_PATHS[pose].map((path, index) => (
+        <path key={`${pose}-${index}`} d={path} />
+      ))}
+    </svg>
+  );
+}
+```
+
+Use a real HTML calibration point instead of relying only on SVG geometry:
+
+```tsx
+export function WorkerHand({
+  pose,
+  positionTransform,
+  handTransform,
+}: {
+  pose: HandPose;
+  positionTransform: string;
+  handTransform: string;
+}) {
+  return (
+    <div
+      data-testid="worker-hand-anchor"
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        transform: positionTransform,
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      <div
+        style={{
+          transform: handTransform,
+          transformOrigin: '48px 90px',
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        <span
+          data-testid="worker-fingertip"
+          style={{
+            position: 'absolute',
+            left: 38,
+            top: 12,
+            width: 1,
+            height: 1,
+            opacity: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <HandGlyph pose={pose} />
+      </div>
+    </div>
+  );
+}
+```
+
+The motion engine must subtract the tested pointer compensation before positioning the hand:
+
+```ts
+export const POINTER_OFFSET_X = 43;
+export const POINTER_OFFSET_Y = 48;
+
+export function handAnchorForTarget(element: HTMLElement): { x: number; y: number } {
+  const rect = element.getBoundingClientRect();
+  return {
+    x: rect.left + rect.width / 2 - POINTER_OFFSET_X,
+    y: rect.top + rect.height / 2 - POINTER_OFFSET_Y,
+  };
+}
+```
+
+### 26.5 Duplicate-safe composer submission
+
+Use one submission path for typed chat, approval buttons, and completed master-microphone dictation:
+
+```ts
+export interface ComposerState {
+  draft: string;
+  submitting: boolean;
+  setDraft(value: string): void;
+  setSubmitting(value: boolean): void;
+}
+
+export function createComposerSubmitter(deps: {
+  state: () => ComposerState;
+  submitTurn: (message: string) => Promise<void>;
+}) {
+  return function submitComposer(message?: string): boolean {
+    const state = deps.state();
+    const text = (message ?? state.draft).trim();
+    if (!text || state.submitting) return false;
+
+    state.setDraft('');
+    state.setSubmitting(true);
+    void deps.submitTurn(text).finally(() => deps.state().setSubmitting(false));
+    return true;
+  };
+}
+```
+
+The microphone control must prime audio synchronously, then submit only on a deliberate master-mic stop:
+
+```ts
+function toggleMasterMicrophone(): void {
+  // Starting dictation is a barge-in. Interrupt first so stopAllAudio() does
+  // not destroy the new Safari playback hold created by this same click.
+  if (!qareenState.micMasterOn) interruptCurrentQareenOutput();
+
+  // Must happen directly inside the click event for Safari autoplay policy.
+  primeAudioPlayback();
+  if (qareenState.micMasterOn) {
+    qareenState.setMicMasterOn(false);
+    // Let the recognition hook detach callbacks before reading the final draft.
+    setTimeout(() => submitComposer(), 0);
+    return;
+  }
+
+  qareenState.setMicMasterOn(true);
+}
+```
+
+The prime must stay alive while the network is pending, not just start and end
+a one-sample buffer. The reference shape is:
+
+```ts
+let primeHold: AudioBufferSourceNode | null = null;
+let primeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function primeAudioPlayback(): void {
+  releasePrimeHold(true);
+
+  const context = getAudioContext();
+  void context.resume();
+  const source = context.createBufferSource();
+  source.buffer = context.createBuffer(1, 1, 22_050);
+  source.loop = true;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  source.connect(gain).connect(context.destination);
+  source.start();
+  primeHold = source;
+
+  const media = getReusableAudioElement();
+  media.loop = false;
+  media.src = SILENT_WAV_DATA_URL;
+  void media.play();
+
+  primeTimer = setTimeout(() => releasePrimeHold(true), 30_000);
+}
+
+async function fetchTtsWithRetry(text: string): Promise<TtsResult> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await fetchTtsOnce(text, { timeoutMs: 12_000 });
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await sleep(250);
+    }
+  }
+  throw lastError;
+}
+```
+
+`releasePrimeHold()` should stop the zero-gain Web Audio source immediately
+before the reusable media element's `src` is replaced with real speech.
+`stopAllAudio()` must also call it for barge-in and unmount cleanup.
+
+Pause-safe recognition should rebuild the current recognition segment and append it to the draft captured at the start of that segment:
+
+```ts
+interface SpeechRecognitionResultLike {
+  0: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorLike {
+  error: string;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorLike) => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+const speechWindow = window as unknown as {
+  SpeechRecognition?: SpeechRecognitionConstructor;
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+};
+
+const REOPEN_DELAY_MS = 300;
+let recognition: SpeechRecognitionLike | null = null;
+let segmentBase = '';
+let reopenTimer: ReturnType<typeof setTimeout> | null = null;
+
+function joined(base: string, spoken: string): string {
+  return [base.trim(), spoken.trim()].filter(Boolean).join(' ');
+}
+
+function startRecognition(): void {
+  if (recognition) return;
+  const Ctor = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
+  if (!Ctor) return;
+
+  segmentBase = qareenState.composerDraft.trim();
+  const current = new Ctor();
+  current.lang = 'en-US';
+  current.continuous = true;
+  current.interimResults = true;
+
+  current.onresult = (event) => {
+    if (recognition !== current) return;
+    let segment = '';
+    for (let index = 0; index < event.results.length; index += 1) {
+      segment += `${event.results[index][0].transcript} `;
+    }
+    qareenState.setComposerDraft(joined(segmentBase, segment));
+  };
+
+  current.onend = () => {
+    if (recognition !== current) return;
+    recognition = null;
+    if (!qareenState.micMasterOn) return;
+    reopenTimer = setTimeout(startRecognition, REOPEN_DELAY_MS);
+  };
+
+  current.onerror = (event) => {
+    if (recognition !== current) return;
+    recognition = null;
+    if (['not-allowed', 'service-not-allowed', 'audio-capture'].includes(event.error)) {
+      qareenState.setMicMasterOn(false);
+      return;
+    }
+    if (qareenState.micMasterOn) {
+      reopenTimer = setTimeout(startRecognition, REOPEN_DELAY_MS);
+    }
+  };
+
+  recognition = current;
+  current.start();
+}
+
+function stopRecognition(): void {
+  if (reopenTimer) clearTimeout(reopenTimer);
+  reopenTimer = null;
+  const current = recognition;
+  recognition = null;
+  if (!current) return;
+  current.onresult = null;
+  current.onend = null;
+  current.onerror = null;
+  current.stop();
+}
+```
+
+TypeScript does not include the Web Speech API in every DOM version. Declare only the surface the application uses instead of adding an unverified third-party type package.
+
+### 26.6 Runtime action policy
+
+The model proposes semantic moves. The runtime owns authorization and DOM activation:
+
+```ts
+import type { QareenProductAdapter } from './product-adapter';
+import type { WorkerMove } from './contracts';
+
+const MODEL_WRITABLE_TYPES = new Set([
+  'text',
+  'email',
+  'search',
+  'tel',
+  'url',
+  'number',
+]);
+
+function writableTextControl(
+  element: HTMLElement,
+): HTMLInputElement | HTMLTextAreaElement | null {
+  if (element instanceof HTMLTextAreaElement) {
+    return element.disabled || element.readOnly ? null : element;
+  }
+  if (!(element instanceof HTMLInputElement)) return null;
+  if (element.disabled || element.readOnly || !MODEL_WRITABLE_TYPES.has(element.type)) return null;
+  return element;
+}
+
+export function setControlledTextValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+): void {
+  const prototype = element instanceof HTMLTextAreaElement
+    ? HTMLTextAreaElement.prototype
+    : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+  if (!setter) throw new Error('Native value setter is unavailable.');
+  setter.call(element, value);
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+export function executeApprovedMove(
+  move: WorkerMove,
+  element: HTMLElement,
+  adapter: QareenProductAdapter,
+  currentTurnApproved: boolean,
+): boolean {
+  const decision = adapter.actionPolicy(move);
+  if (!decision.allowed) return false;
+  if (decision.requiresApproval && !currentTurnApproved) return false;
+
+  if (move.move === 'press') {
+    if (element instanceof HTMLButtonElement && element.disabled) return false;
+    element.focus({ preventScroll: true });
+    element.click();
+    return true;
+  }
+
+  if (move.move === 'type' && typeof move.text === 'string') {
+    const control = writableTextControl(element);
+    if (!control) return false;
+    setControlledTextValue(control, move.text);
+    return true;
+  }
+
+  return move.move === 'glide' || move.move === 'circle';
+}
+```
+
+This general executor must remain unable to write passwords. Login and registration credentials use the separate browser-local flow described in section 15.
+
+### 26.7 Edge TTS backend
+
+Create `qareen/tts.py`:
+
+```python
+import base64
+import logging
+
+import edge_tts
+
+from .schemas import TtsResponse, TtsSegment, WordTiming
+
+logger = logging.getLogger("qareen")
+
+VOICE_PRIMARY = "en-US-GuyNeural"
+VOICE_FALLBACK = "en-US-ChristopherNeural"
+RATE = "-12%"
+PITCH = "-6Hz"
+PAUSE_MS = 450
+
+
+def ticks_to_ms(ticks: int) -> int:
+    """Edge TTS word offsets are reported in 100-nanosecond ticks."""
+    return ticks // 10_000
+
+
+async def synthesize_segment(text: str, voice: str) -> TtsSegment:
+    communicate = edge_tts.Communicate(
+        text,
+        voice=voice,
+        rate=RATE,
+        pitch=PITCH,
+        boundary="WordBoundary",
+    )
+    audio = bytearray()
+    timings: list[WordTiming] = []
+
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio.extend(chunk["data"])
+        elif chunk["type"] == "WordBoundary":
+            timings.append(
+                WordTiming(
+                    word=chunk["text"],
+                    ms=ticks_to_ms(chunk["offset"]),
+                )
+            )
+
+    if not audio:
+        raise RuntimeError(f"edge-tts returned no audio for {voice}")
+
+    return TtsSegment(
+        audio_base64=base64.b64encode(bytes(audio)).decode("ascii"),
+        word_timings=timings,
+    )
+
+
+async def synthesize_line(text: str) -> TtsResponse:
+    parts = [part.strip() for part in text.split("...") if part.strip()]
+    if not parts:
+        parts = [text]
+
+    segments: list[TtsSegment] = []
+    for part in parts:
+        try:
+            segment = await synthesize_segment(part, VOICE_PRIMARY)
+        except Exception:
+            logger.warning("Primary TTS voice failed", exc_info=True)
+            segment = await synthesize_segment(part, VOICE_FALLBACK)
+        segments.append(segment)
+
+    return TtsResponse(segments=segments, pause_ms=PAUSE_MS)
+```
+
+Create the minimum TTS schemas:
+
+```python
+from pydantic import BaseModel
+
+
+class TtsRequest(BaseModel):
+    text: str
+
+
+class WordTiming(BaseModel):
+    word: str
+    ms: int
+
+
+class TtsSegment(BaseModel):
+    audio_base64: str
+    word_timings: list[WordTiming]
+
+
+class TtsResponse(BaseModel):
+    segments: list[TtsSegment]
+    pause_ms: int = 450
+```
+
+### 26.8 FastAPI transport
+
+```python
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
+
+from .brain import stream_brain_response
+from .schemas import BrainRequest, TtsRequest, TtsResponse
+from .tts import synthesize_line
+
+router = APIRouter(prefix="/qareen", tags=["qareen"])
+
+
+@router.get("/health")
+async def qareen_health() -> dict[str, str]:
+    return {"status": "ok", "service": "qareen"}
+
+
+@router.post("/brain/stream")
+async def qareen_brain_stream(request: BrainRequest) -> StreamingResponse:
+    return StreamingResponse(
+        stream_brain_response(request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/tts", response_model=TtsResponse)
+async def qareen_tts(request: TtsRequest) -> TtsResponse:
+    return await synthesize_line(request.text)
+```
+
+The model API key must be read only by the backend process. Do not add it to these code blocks, frontend environment variables, or client requests.
+
+### 26.9 Required security header
+
+For a Next.js host, allow same-origin microphone access while keeping unrelated sensors disabled:
+
+```js
+const securityHeaders = [
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(self), geolocation=()',
+  },
+];
+
+module.exports = {
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
+  },
+};
+```
+
+Using `microphone=()` breaks browser dictation even if the user selects Allow in Safari.
+
+### 26.10 Minimum end-to-end test
+
+The first receiving-product test should prove the whole user-visible chain, not just individual functions:
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test('dictation stop sends, speaks, and guides', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Open Qareen').click();
+  const handBefore = await page.getByTestId('worker-hand-anchor').getAttribute('style');
+  await page.getByTestId('mic-toggle').click();
+
+  // In automation, inject a controlled SpeechRecognition result here.
+  await page.evaluate(() => {
+    window.__testRecognition.emitFinal('Show me active projects');
+  });
+
+  await expect(page.getByTestId('qareen-message-input'))
+    .toHaveValue('Show me active projects');
+
+  // Manual master-mic stop is the deliberate submit action.
+  await page.getByTestId('mic-toggle').click();
+
+  await expect(page.getByTestId('qareen-user-message'))
+    .toContainText('Show me active projects');
+  await expect(page.getByTestId('voice-output-state'))
+    .not.toHaveAttribute('data-state', 'unavailable');
+  await expect.poll(
+    async () => (await page.getByTestId('worker-hand-anchor').getAttribute('style')) !== handBefore,
+  ).toBe(true);
+});
+```
+
+The test helper represented by `window.__testRecognition` must be installed only by the test harness. Do not ship a fake speech recognizer in production code.
+
+### 26.11 Copy order for the receiving developer
+
+Implement and verify the code in this order:
+
+1. Copy the contracts and hand glyph.
+2. Create the real product adapter and tag five controls.
+3. Mount the calibrated single-hand overlay.
+4. Add the sanitized page collector and verify Qareen's own UI is excluded.
+5. Add the duplicate-safe composer and pause-safe dictation lifecycle.
+6. Add TTS and confirm the exact voice settings.
+7. Connect the streamed brain response.
+8. Add the runtime action policy before enabling any real press.
+9. Run the minimum end-to-end test in Chromium and WebKit.
+10. Expand target coverage only after the first complete route passes.

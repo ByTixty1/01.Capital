@@ -130,8 +130,12 @@ fields, and every submit/save/create control remain blocked.
   it follows the browser's normal media-output path. Web Audio decoding and
   playback remain as fallback and provide duration data for synchronization.
 - Both media and Web Audio are unlocked synchronously from Send, microphone,
-  and push-to-talk gestures before any network request. This prevents autoplay
-  policies from blocking delayed TTS playback.
+  and push-to-talk gestures before any network request. A zero-volume Web Audio
+  source keeps that context alive for up to 30 seconds while Claude and TTS
+  respond. The reusable media element is primed once and must not loop its
+  silent clip; Safari may otherwise report playback while remaining silent.
+- Each TTS request has a 12-second attempt timeout and retries once after a
+  short delay. Empty or undecodable audio is treated as a failed attempt.
 - The chat header exposes `Voice ready`, `Speaking`, or `Voice unavailable`.
   A failed TTS request is therefore visible instead of being swallowed.
 - TTS failure is non-fatal: the transcript and visual guidance continue.
