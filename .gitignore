@@ -90,3 +90,4 @@ frontend/playwright-report/
 
 # Superpowers brainstorming visual companion (local mockups)
 .superpowers/
+output/

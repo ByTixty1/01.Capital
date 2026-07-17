@@ -26,10 +26,12 @@ export function useLandingEffects(): void {
       isArMode = !isArMode;
       if (isArMode) {
         document.body.classList.add('lp-ar-mode');
+        langToggle?.setAttribute('aria-pressed', 'true');
         if (langActiveLabel) langActiveLabel.textContent = 'AR';
         if (langOtherLabel) langOtherLabel.textContent = 'EN';
       } else {
         document.body.classList.remove('lp-ar-mode');
+        langToggle?.setAttribute('aria-pressed', 'false');
         if (langActiveLabel) langActiveLabel.textContent = 'EN';
         if (langOtherLabel) langOtherLabel.textContent = 'AR';
       }

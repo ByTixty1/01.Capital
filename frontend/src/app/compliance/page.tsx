@@ -3,6 +3,7 @@ import { MarketingFeaturePage } from '@/components/MarketingFeaturePage';
 export default function CompliancePage() {
   return (
     <MarketingFeaturePage
+      ghostPrefix="compliance_page"
       badge="Compliance"
       headline={<>Built for Saudi<br />corporate law</>}
       sub="01 Capital is built around the 2023 Saudi Companies Law from the ground up — not retrofitted from foreign jurisdictions. Every cap table action is traceable, every document is watermarked for legal review."

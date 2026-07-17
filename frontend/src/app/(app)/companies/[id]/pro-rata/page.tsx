@@ -115,13 +115,13 @@ export default function ProRataPage() {
       <div style={s.back}><a href={`/companies/${companyId}`} style={s.backLink}>← Back</a></div>
       <div style={s.headRow}>
         <div>
-          <h1 style={s.heading}>Pro-rata rights</h1>
+          <h1 data-ghost="app_prorata_headline" style={s.heading}>Pro-rata rights</h1>
           <p style={s.sub}>
             Pre-emptive subscription rights (Saudi Companies Law Art. 142). Track each granted
             right, then record whether the holder exercises or waives it.
           </p>
         </div>
-        <button onClick={() => setShowForm(v => !v)} style={s.addBtn}>
+        <button data-ghost="app_prorata_add" onClick={() => setShowForm(v => !v)} style={s.addBtn}>
           {showForm ? 'Cancel' : 'Add'}
         </button>
       </div>
@@ -182,6 +182,7 @@ export default function ProRataPage() {
         </form>
       )}
 
+      <div data-ghost="app_prorata_list">
       {loading && <p style={s.muted}>Loading…</p>}
       {!loading && rights.length === 0 && (
         <p style={s.muted}>No pro-rata rights yet. Use “Add” to grant one to a stakeholder.</p>
@@ -240,6 +241,7 @@ export default function ProRataPage() {
           </tbody>
         </table>
       )}
+      </div>
     </div>
   );
 }

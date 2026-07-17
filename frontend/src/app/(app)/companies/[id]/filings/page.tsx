@@ -58,12 +58,12 @@ export default function FilingsPage() {
   return (
     <div style={s.page}>
       <div style={s.back}><a href={`/companies/${companyId}`} style={s.backLink}>← Back</a></div>
-      <h1 style={s.heading}>Filings tracker</h1>
+      <h1 data-ghost="app_filings_headline" style={s.heading}>Filings tracker</h1>
       <p style={s.sub}>Compliance obligations triggered by cap table events. Review with your legal advisor before filing.</p>
       {loading && <p style={s.muted}>Loading…</p>}
       {error && <p style={s.error}>{error}</p>}
       {!loading && filings.length === 0 && <p style={s.muted}>No filings triggered yet. Issue shares or record capital changes to generate filing requirements.</p>}
-      <div style={s.list}>
+      <div data-ghost="app_filings_list" style={s.list}>
         {filings.map(f => (
           <div key={f.id} style={{ ...s.card, ...(f.is_overdue ? { borderColor: 'rgba(239,68,68,0.4)' } : {}) }}>
             <div style={s.cardTop}>

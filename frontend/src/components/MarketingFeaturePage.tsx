@@ -19,6 +19,7 @@ export function MarketingFeaturePage({
   features,
   cta,
   notice,
+  ghostPrefix,
 }: {
   badge: string;
   headline: ReactNode;
@@ -26,6 +27,10 @@ export function MarketingFeaturePage({
   features: MarketingFeature[];
   cta?: { heading: string; sub: string };
   notice?: { title: string; body: string };
+  /** Qareen data-ghost id prefix for this page — see ghostRegistry.ts.
+   * One shared template, four real routes, so ids must be page-scoped
+   * (e.g. "esop_headline") rather than reused across routes. */
+  ghostPrefix: string;
 }) {
   return (
     <MarketingLayout>
@@ -34,7 +39,7 @@ export function MarketingFeaturePage({
           <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--brand-purple)', textTransform: 'uppercase', marginBottom: 20 }}>
             {badge}
           </p>
-          <h1 style={{ fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1, maxWidth: 700, marginBottom: 24 }}>
+          <h1 data-ghost={`${ghostPrefix}_headline`} style={{ fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1, maxWidth: 700, marginBottom: 24 }}>
             {headline}
           </h1>
           <p style={{ fontSize: 17, color: 'var(--text-secondary)', lineHeight: 1.7, maxWidth: 560 }}>
@@ -42,7 +47,7 @@ export function MarketingFeaturePage({
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 80 }}>
+        <div data-ghost={`${ghostPrefix}_features`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 80 }}>
           {features.map(({ title, desc, icon }) => (
             <div key={title} className="glass-panel" style={{ padding: '32px 28px' }}>
               <div style={{ fontSize: 28, marginBottom: 16 }}>{icon}</div>
@@ -53,7 +58,7 @@ export function MarketingFeaturePage({
         </div>
 
         {cta && (
-          <div className="glass-panel" style={{ padding: '48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
+          <div data-ghost={`${ghostPrefix}_cta`} className="glass-panel" style={{ padding: '48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
             <div>
               <h2 style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 8 }}>
                 {cta.heading}
@@ -67,7 +72,7 @@ export function MarketingFeaturePage({
         )}
 
         {notice && (
-          <div className="glass-panel" style={{ padding: '48px' }}>
+          <div data-ghost={`${ghostPrefix}_notice`} className="glass-panel" style={{ padding: '48px' }}>
             <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.10em', color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 16 }}>
               {notice.title}
             </p>
