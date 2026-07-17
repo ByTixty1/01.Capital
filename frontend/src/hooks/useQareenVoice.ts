@@ -2,165 +2,157 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useQareenStore } from '@/lib/qareen/store';
-import { submitQareenUserInput } from '@/lib/qareen/executor';
 import { getSpeechRecognitionCtor, type SpeechRecognitionLike } from '@/lib/qareen/speechTypes';
 import { primeAudioPlayback } from '@/lib/qareen/audio';
+import { interruptQareenOutput } from '@/lib/qareen/executor';
 
-const ENDPOINT_STABLE_MS = 350;
-const NUDGE_SILENCE_MS = 6000;
 const REOPEN_DELAY_MS = 300;
-const NUDGE_LINE = "Take your time. The deadline won't.";
+const FATAL_RECOGNITION_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture']);
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 }
 
+function joinDraft(base: string, spoken: string): string {
+  return [base.trim(), spoken.trim()].filter(Boolean).join(' ');
+}
+
 /**
- * Voice input: continuous listening with 350ms-stable endpointing while the
- * mic master toggle is on, plus push-to-talk (hold spacebar) that works
- * even mid-response for barge-in. No live microphone testing was possible
- * in this environment — the endpointing/turn-taking state machine is
- * covered by a Playwright test that stubs window.SpeechRecognition.
+ * Voice input is explicit dictation, not automatic endpoint submission.
+ * Recognition writes interim and final words into the shared chat composer.
+ * Natural recognition endings are reopened while the mic master toggle is on,
+ * so a pause neither submits the message nor prevents the next spoken segment.
+ * The master mic's stop control submits the completed draft; push-to-talk
+ * release keeps its draft for explicit Send.
  */
 export function useQareenVoice(): void {
   const micMasterOn = useQareenStore((s) => s.micMasterOn);
   const setMicState = useQareenStore((s) => s.setMicState);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const interimRef = useRef('');
-  const stableTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reopenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const segmentBaseRef = useRef('');
   const pushToTalkRef = useRef(false);
-  const turnInFlightRef = useRef(false);
   const startListeningRef = useRef<() => void>(() => {});
 
-  const clearStableTimer = useCallback(() => {
-    if (stableTimerRef.current) {
-      clearTimeout(stableTimerRef.current);
-      stableTimerRef.current = null;
+  const clearReopenTimer = useCallback(() => {
+    if (reopenTimerRef.current) {
+      clearTimeout(reopenTimerRef.current);
+      reopenTimerRef.current = null;
     }
   }, []);
 
-  const clearSilenceTimer = useCallback(() => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  }, []);
-
-  const armSilenceTimer = useCallback(() => {
-    clearSilenceTimer();
-    silenceTimerRef.current = setTimeout(() => {
-      useQareenStore.getState().appendConversationEntry({
-        id: `qareen-nudge-${Date.now()}`,
-        role: 'qareen',
-        text: NUDGE_LINE,
-        timestamp: Date.now(),
-      });
-      // Deliberately no brain call — a local canned line, then wait forever.
-    }, NUDGE_SILENCE_MS);
-  }, [clearSilenceTimer]);
-
-  const submitTranscript = useCallback(
-    (text: string, interrupted: boolean) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-      clearStableTimer();
-      clearSilenceTimer();
-      interimRef.current = '';
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
-      setMicState('thinking');
-      turnInFlightRef.current = true;
-
-      void submitQareenUserInput(trimmed, interrupted).finally(() => {
-        turnInFlightRef.current = false;
-        if (useQareenStore.getState().micMasterOn) {
-          setTimeout(() => setMicState('live'), REOPEN_DELAY_MS);
-        } else {
-          setMicState('muted');
-        }
-      });
-    },
-    [clearStableTimer, clearSilenceTimer, setMicState]
-  );
+  const scheduleReopen = useCallback(() => {
+    clearReopenTimer();
+    reopenTimerRef.current = setTimeout(() => {
+      reopenTimerRef.current = null;
+      const state = useQareenStore.getState();
+      if (state.micMasterOn || pushToTalkRef.current) {
+        startListeningRef.current();
+      }
+    }, REOPEN_DELAY_MS);
+  }, [clearReopenTimer]);
 
   const startListening = useCallback(() => {
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor || recognitionRef.current) return;
 
+    clearReopenTimer();
+    segmentBaseRef.current = useQareenStore.getState().composerDraft.trim();
+
     const recognition = new Ctor();
     recognition.lang = 'en-US';
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
 
     recognition.onresult = (event) => {
-      let interim = '';
-      let final = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (recognitionRef.current !== recognition) return;
+      let segment = '';
+      // Web Speech keeps earlier final results in this array. Rebuilding the
+      // current recognition segment avoids duplicating words as results evolve.
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
-        if (!result) continue;
-        if (result.isFinal) final += result[0].transcript;
-        else interim += result[0].transcript;
+        if (result?.[0]?.transcript) segment += `${result[0].transcript} `;
       }
-
-      armSilenceTimer();
-
-      if (final.trim()) {
-        submitTranscript(final, false);
-        return;
-      }
-
-      const text = interim.trim();
-      if (!text || text === interimRef.current) return;
-      interimRef.current = text;
-      clearStableTimer();
-      stableTimerRef.current = setTimeout(() => {
-        submitTranscript(interimRef.current, false);
-      }, ENDPOINT_STABLE_MS);
+      useQareenStore.getState().setComposerDraft(joinDraft(segmentBaseRef.current, segment));
     };
 
     recognition.onend = () => {
+      // Ignore onend emitted by a recognition instance we deliberately
+      // detached before stopping it.
+      if (recognitionRef.current !== recognition) return;
       recognitionRef.current = null;
+
       const state = useQareenStore.getState();
-      if (state.micMasterOn && state.micState === 'live' && !turnInFlightRef.current) {
-        startListeningRef.current();
+      if (state.micMasterOn || pushToTalkRef.current) {
+        setMicState('live');
+        scheduleReopen();
+      } else {
+        setMicState('muted');
       }
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) return;
       recognitionRef.current = null;
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      try {
+        recognition.abort();
+      } catch {
+        // The browser may already have ended the failed recognition session.
+      }
+
+      if (FATAL_RECOGNITION_ERRORS.has(event.error)) {
+        useQareenStore.getState().setMicMasterOn(false);
+        setMicState('muted');
+        return;
+      }
+
+      const state = useQareenStore.getState();
+      if (state.micMasterOn || pushToTalkRef.current) scheduleReopen();
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
-    armSilenceTimer();
-  }, [armSilenceTimer, clearStableTimer, submitTranscript]);
+    try {
+      recognition.start();
+      setMicState('live');
+    } catch {
+      recognitionRef.current = null;
+      if (useQareenStore.getState().micMasterOn || pushToTalkRef.current) scheduleReopen();
+    }
+  }, [clearReopenTimer, scheduleReopen, setMicState]);
 
   useEffect(() => {
     startListeningRef.current = startListening;
   }, [startListening]);
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
+    clearReopenTimer();
+    const recognition = recognitionRef.current;
     recognitionRef.current = null;
-    clearStableTimer();
-    clearSilenceTimer();
-    interimRef.current = '';
-  }, [clearStableTimer, clearSilenceTimer]);
+    if (recognition) {
+      recognition.onresult = null;
+      recognition.onend = null;
+      recognition.onerror = null;
+      recognition.stop();
+    }
+  }, [clearReopenTimer]);
 
   useEffect(() => {
     if (micMasterOn) {
       setMicState('live');
       startListening();
-    } else {
+    } else if (!pushToTalkRef.current) {
       stopListening();
       setMicState('muted');
     }
+
     return () => stopListening();
-    // Only micMasterOn should retrigger this — startListening/stopListening
-    // are stable useCallbacks that read fresh store state internally.
+    // Only the master toggle should restart this effect. The callbacks read
+    // current store state and remain wired through startListeningRef.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [micMasterOn]);
 
@@ -170,42 +162,34 @@ export function useQareenVoice(): void {
       event.preventDefault();
       if (pushToTalkRef.current) return;
       pushToTalkRef.current = true;
+
       if (!primeAudioPlayback()) {
         useQareenStore.getState().setVoiceOutputState('unavailable');
       }
 
-      const Ctor = getSpeechRecognitionCtor();
-      if (!Ctor) return;
-
+      if (!getSpeechRecognitionCtor()) {
+        pushToTalkRef.current = false;
+        return;
+      }
+      interruptQareenOutput();
       stopListening();
-      interimRef.current = '';
-      const recognition = new Ctor();
-      recognition.lang = 'en-US';
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.onresult = (recognitionEvent) => {
-        let combined = '';
-        for (let i = 0; i < recognitionEvent.results.length; i++) {
-          const result = recognitionEvent.results[i];
-          if (result) combined += result[0].transcript;
-        }
-        interimRef.current = combined.trim();
-      };
-      recognitionRef.current = recognition;
-      recognition.start();
+      startListeningRef.current();
       setMicState('live');
     }
 
     function onKeyUp(event: KeyboardEvent): void {
       if (event.code !== 'Space' || !pushToTalkRef.current) return;
       pushToTalkRef.current = false;
+      stopListening();
 
-      const wasTalking = turnInFlightRef.current;
-      recognitionRef.current?.stop();
-      recognitionRef.current = null;
-      const text = interimRef.current;
-      interimRef.current = '';
-      if (text) submitTranscript(text, wasTalking);
+      if (useQareenStore.getState().micMasterOn) {
+        setMicState('live');
+        scheduleReopen();
+      } else {
+        setMicState('muted');
+      }
+      // Push-to-talk is also dictation: releasing Space leaves the recognized
+      // text in the composer. Sending remains a separate user action.
     }
 
     window.addEventListener('keydown', onKeyDown);
@@ -214,5 +198,5 @@ export function useQareenVoice(): void {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, [submitTranscript, stopListening, setMicState]);
+  }, [scheduleReopen, setMicState, stopListening]);
 }

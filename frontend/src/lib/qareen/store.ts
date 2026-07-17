@@ -41,6 +41,13 @@ interface QareenState {
   micMasterOn: boolean;
   setMicMasterOn: (on: boolean) => void;
 
+  /** In-memory chat composer shared with voice dictation. Deliberately not
+   * persisted because it may temporarily contain sensitive user input. */
+  composerDraft: string;
+  setComposerDraft: (value: string) => void;
+  composerSubmitting: boolean;
+  setComposerSubmitting: (value: boolean) => void;
+
   voiceOutputState: 'idle' | 'speaking' | 'unavailable';
   setVoiceOutputState: (state: 'idle' | 'speaking' | 'unavailable') => void;
 
@@ -80,6 +87,11 @@ export const useQareenStore = create<QareenState>()(
 
       micMasterOn: false,
       setMicMasterOn: (on) => set({ micMasterOn: on }),
+
+      composerDraft: '',
+      setComposerDraft: (value) => set({ composerDraft: value }),
+      composerSubmitting: false,
+      setComposerSubmitting: (value) => set({ composerSubmitting: value }),
 
       voiceOutputState: 'idle',
       setVoiceOutputState: (state) => set({ voiceOutputState: state }),

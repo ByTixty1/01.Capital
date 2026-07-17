@@ -28,5 +28,17 @@ All notable changes to this project are recorded here. We follow [Keep a Changel
 - Docker compose for local dev
 - GitHub Actions CI
 
+### Fixed
+
+- Changed Qareen voice input to explicit, pause-safe dictation. Recognition now
+  writes into the chat composer, reopens after browser endpointing, and sends
+  only when the user presses Send.
+- Changed Qareen's chat composer to support multiline messages, with Enter for
+  new lines and Ctrl/Cmd+Enter for submission.
+- Allowed same-origin microphone access in the frontend Permissions Policy so
+  Safari can use Qareen dictation while camera and geolocation remain disabled.
+- Made stopping Qareen dictation submit the completed draft exactly once, so a
+  manual mic stop reliably starts Claude, TTS, and hand guidance.
+
 ### Status
 Pre-discovery. No paying customers. No production deployment. The 14-day discovery sprint kicks off when the team is ready.

@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQareenStore } from '@/lib/qareen/store';
-import { submitQareenUserInput } from '@/lib/qareen/executor';
 import { primeAudioPlayback } from '@/lib/qareen/audio';
+import { submitQareenComposerDraft, submitQareenMessage } from '@/lib/qareen/composer';
 
 export function ChatPanel() {
   const conversation = useQareenStore((s) => s.conversation);
   const pendingApproval = useQareenStore((s) => s.pendingApproval);
   const voiceOutputState = useQareenStore((s) => s.voiceOutputState);
+  const micState = useQareenStore((s) => s.micState);
+  const draft = useQareenStore((s) => s.composerDraft);
+  const setDraft = useQareenStore((s) => s.setComposerDraft);
+  const sending = useQareenStore((s) => s.composerSubmitting);
 
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,14 +31,17 @@ export function ChatPanel() {
       useQareenStore.getState().setVoiceOutputState('unavailable');
     }
 
-    setSending(true);
-    void submitQareenUserInput(trimmed).finally(() => setSending(false));
+    submitQareenMessage(trimmed);
   }
 
   function handleSubmit(event: React.FormEvent): void {
     event.preventDefault();
-    sendMessage(draft);
-    setDraft('');
+    // Sending ends dictation first so Qareen cannot transcribe its own TTS.
+    useQareenStore.getState().setMicMasterOn(false);
+    if (!primeAudioPlayback()) {
+      useQareenStore.getState().setVoiceOutputState('unavailable');
+    }
+    submitQareenComposerDraft();
   }
 
   return (
@@ -124,14 +129,23 @@ export function ChatPanel() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', gap: 8, padding: 12, borderTop: '1px solid var(--glass-border)' }}>
-        <input
+      <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: 12, borderTop: '1px solid var(--glass-border)' }}>
+        <textarea
+          data-testid="qareen-message-input"
           className="glass-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={sending ? 'Thinking…' : 'Type a message'}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder={sending ? 'Thinking…' : micState === 'live' ? 'Listening… stop the mic to send' : 'Type a message'}
           disabled={sending}
-          style={{ fontSize: 13, padding: '8px 10px' }}
+          rows={2}
+          aria-label="Message Qareen"
+          style={{ fontSize: 13, lineHeight: 1.45, padding: '8px 10px', minHeight: 40, maxHeight: 120, resize: 'vertical' }}
         />
         <button type="submit" className="btn-primary" disabled={sending} style={{ padding: '8px 14px', fontSize: 13 }}>
           Send

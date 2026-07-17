@@ -22,6 +22,18 @@ import type { BrainLine, WorkerMove, Beat } from './types';
  * still-queued line dispatches instead of letting them play out after. */
 let currentGeneration = 0;
 
+/** Stops the current spoken/guided response as soon as the user starts a new
+ * dictation. The draft is not submitted here; Send remains explicit. */
+export function interruptQareenOutput(): void {
+  currentGeneration += 1;
+  dispatchChain = Promise.resolve();
+  stopAllAudio();
+  useQareenStore.getState().setVoiceOutputState('idle');
+  const engine = getMotionEngine();
+  engine?.setTalking(false);
+  void engine?.retreatWorkerHand();
+}
+
 const FORM_FIELD_GHOST_IDS: readonly (keyof FormDraft)[] = ['field_name', 'field_id', 'field_shares'];
 
 function ghostIdToFormField(target: string): keyof FormDraft | null {

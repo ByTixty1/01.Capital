@@ -16,8 +16,8 @@ The intended experience is:
 1. The user summons Qareen from the public or authenticated navigation.
 2. Guided movement starts automatically. The user may switch it off for a
    text-and-voice-only conversation.
-3. The user types a question, enables continuous microphone listening, or
-   holds Space outside a text field for push-to-talk.
+3. The user types a question or enables dictation. Speech appears in the chat
+   composer, and the user reviews it before pressing Send.
 4. The backend streams short spoken lines with hand instructions.
 5. Text-to-speech returns audio and per-word timestamps.
 6. Qareen speaks each line while the worker hand navigates, scrolls, and points
@@ -98,12 +98,25 @@ fields, and every submit/save/create control remain blocked.
 
 ### Input
 
-- Continuous listening uses the browser Web Speech API with `en-US`.
-- A stable interim transcript is submitted after 350 ms.
-- Holding Space activates push-to-talk unless focus is in an input, textarea,
-  or editable element.
-- Speaking during a response barges in: current audio stops, stale queued
-  motion is cancelled, and the new turn starts.
+- Dictation uses the browser Web Speech API with `en-US` and writes interim and
+  final recognition results into the visible chat composer.
+- The application's `Permissions-Policy` must allow `microphone=(self)`; using
+  `microphone=()` disables Qareen dictation even when the user grants Safari
+  microphone permission.
+- The composer supports multiple lines. Enter inserts a line break; the Send
+  button or Ctrl/Cmd+Enter submits the complete message.
+- Pauses and final recognition results never submit a message. If the browser
+  ends recognition, Qareen reopens it after 300 ms while dictation remains on.
+- The user reviews the live text while dictating. Stopping the microphone sends
+  the complete draft once. Pauses and browser endpointing never send it.
+- Pressing Send while dictation is active also stops the microphone and uses
+  the same duplicate-guarded submission path.
+- Holding Space activates temporary dictation unless focus is in an input,
+  textarea, or editable element. Releasing Space keeps the text in the composer
+  and does not send it.
+- Starting dictation during a response stops current audio and stale queued
+  motion immediately. The new turn begins only after the user manually stops
+  the master microphone or presses Send.
 - If speech recognition is unavailable, typed chat remains fully usable.
 
 ### Output
@@ -265,8 +278,8 @@ cd backend
 
 Current Chromium and Safari/WebKit coverage includes motion, freeze/resume,
 guide-mode routing,
-public same-page scrolling, authenticated tenant-preserving navigation, voice
-endpointing, microphone reopen, push-to-talk, text-field protection, and
+public same-page scrolling, authenticated tenant-preserving navigation,
+pause-safe dictation, microphone reopen, push-to-talk, text-field protection, and
 word-synchronized voice/hand behavior. It also verifies guided-by-default
 summoning, the rendered fingertip landing, delayed unmuted full-volume media
 playback, visible TTS failure, and a complete opt-in live Claude/TTS website

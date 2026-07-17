@@ -138,5 +138,8 @@ test('model type move updates an auto-discovered textarea', async ({ page }) => 
   await page.getByRole('button', { name: 'Send', exact: true }).click();
 
   expect(textareaTarget).toMatch(/^page_textbox_/);
-  await expect(page.locator('textarea')).toHaveValue('Closing our Series A.', { timeout: 8_000 });
+  await expect(page.locator('textarea:not([data-testid="qareen-message-input"])')).toHaveValue(
+    'Closing our Series A.',
+    { timeout: 8_000 },
+  );
 });

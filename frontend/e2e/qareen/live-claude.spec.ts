@@ -125,3 +125,77 @@ test('real Claude uses live page context to locate Sign in accurately', async ({
   expect(await fingertipDistanceTo(page, '[data-ghost="nav_sign_in"]')).toBeLessThanOrEqual(24);
   await page.screenshot({ path: '/tmp/qareen-live-sign-in-context.png', fullPage: false });
 });
+
+test('dictated draft sends, speaks, and moves the worker hand', async ({ page }) => {
+  await page.addInitScript(`
+    class FakeSpeechRecognition {
+      constructor() {
+        this.lang = '';
+        this.continuous = false;
+        this.interimResults = false;
+        this.onresult = null;
+        this.onend = null;
+        this.onerror = null;
+        window.__qareenLiveRecognitions = window.__qareenLiveRecognitions || [];
+        window.__qareenLiveRecognitions.push(this);
+      }
+      start() {}
+      stop() { if (this.onend) this.onend(); }
+      abort() { if (this.onend) this.onend(); }
+    }
+    window.SpeechRecognition = FakeSpeechRecognition;
+    window.webkitSpeechRecognition = FakeSpeechRecognition;
+
+    window.__qareenLiveMediaPlays = [];
+    const nativeMediaPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      window.__qareenLiveMediaPlays.push({ srcLength: this.src.length, muted: this.muted, volume: this.volume });
+      return nativeMediaPlay.call(this);
+    };
+  `);
+
+  await page.goto('/');
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+  await page.getByLabel(/Open Qareen/i).click();
+
+  const workerBefore = await page.getByTestId('worker-hand-anchor').getAttribute('style');
+  await page.getByTestId('mic-toggle').click();
+  await page.evaluate(() => {
+    const recognitions = (window as unknown as {
+      __qareenLiveRecognitions: { onresult?: (event: unknown) => void }[];
+    }).__qareenLiveRecognitions;
+    recognitions[recognitions.length - 1]?.onresult?.({
+      resultIndex: 0,
+      results: [{ isFinal: true, 0: { transcript: 'Show me the authorized shares' } }],
+    });
+  });
+
+  const composer = page.getByTestId('qareen-message-input');
+  await expect(composer).toHaveValue('Show me the authorized shares');
+  const brainResponse = page.waitForResponse((response) => response.url().includes('/qareen/brain/stream'));
+  const ttsResponse = page.waitForResponse((response) => response.url().includes('/qareen/tts'));
+  await page.getByTestId('mic-toggle').click();
+
+  await expect((await brainResponse).status()).toBe(200);
+  await expect((await ttsResponse).status()).toBe(200);
+  await expect(page.getByText(/ten million|authorized shares/i).first()).toBeVisible({ timeout: 30_000 });
+  await expect.poll(
+    () => fingertipDistanceToAuthorized(page),
+    { timeout: 30_000, intervals: [20] },
+  ).toBeLessThanOrEqual(24);
+  await expect.poll(
+    async () => page.evaluate(() => {
+      const plays = (window as unknown as {
+        __qareenLiveMediaPlays: { srcLength: number; muted: boolean; volume: number }[];
+      }).__qareenLiveMediaPlays;
+      return plays.some((play) => play.srcLength > 1_000 && !play.muted && play.volume === 1);
+    }),
+    { timeout: 30_000 },
+  ).toBe(true);
+  await expect.poll(
+    async () => (await page.getByTestId('worker-hand-anchor').getAttribute('style')) !== workerBefore,
+    { timeout: 30_000 },
+  ).toBe(true);
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeEnabled({ timeout: 80_000 });
+});

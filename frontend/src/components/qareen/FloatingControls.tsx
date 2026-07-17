@@ -3,6 +3,8 @@
 import { useQareenStore } from '@/lib/qareen/store';
 import { useQareenVoice } from '@/hooks/useQareenVoice';
 import { primeAudioPlayback } from '@/lib/qareen/audio';
+import { interruptQareenOutput } from '@/lib/qareen/executor';
+import { submitQareenComposerDraft } from '@/lib/qareen/composer';
 
 export function FloatingControls() {
   useQareenVoice();
@@ -57,10 +59,20 @@ export function FloatingControls() {
           if (!primeAudioPlayback()) {
             useQareenStore.getState().setVoiceOutputState('unavailable');
           }
-          setMicMasterOn(!micMasterOn);
+          if (micMasterOn) {
+            setMicMasterOn(false);
+            // Let the voice hook detach recognition callbacks before reading
+            // and submitting the completed draft. Audio was primed by this
+            // click, preserving Safari's user-gesture requirement.
+            setTimeout(() => submitQareenComposerDraft(), 0);
+          } else {
+            interruptQareenOutput();
+            setMicMasterOn(true);
+          }
         }}
         aria-pressed={micMasterOn}
-        aria-label={micMasterOn ? 'Mute Qareen mic' : 'Unmute Qareen mic'}
+        aria-label={micMasterOn ? 'Stop Qareen dictation' : 'Start Qareen dictation'}
+        title={micMasterOn ? 'Stop dictation and send this message.' : 'Start dictation. Pauses will not send your message.'}
       >
         <span
           data-testid="mic-dot"

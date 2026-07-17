@@ -30,7 +30,9 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // Qareen's browser speech recognition needs microphone access on our own
+  // origin. Camera and geolocation remain disabled everywhere.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
   ...(isDev
     ? []
     : [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' }]),
