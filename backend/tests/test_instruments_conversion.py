@@ -144,12 +144,25 @@ async def _safe(client: AsyncClient, headers: dict, company_id: str, sh: str) ->
     )).json()["id"]
 
 
+async def _founder_shares(client: AsyncClient, headers: dict, company_id: str, sh: str) -> None:
+    # The convert endpoint derives pre-money fully-diluted shares from the cap
+    # table to price a valuation cap — a company with zero issued shares cannot
+    # convert a capped SAFE (422).
+    res = await client.post(
+        f"/api/companies/{company_id}/cap-table/issue",
+        json={"stakeholder_id": sh, "quantity": 100000, "share_class": "common", "event_date": "2026-01-01"},
+        headers=headers,
+    )
+    assert res.status_code == 201, res.text
+
+
 @pytest.mark.asyncio
 async def test_convert_preview_does_not_persist(db_client, mfa_headers):
     company_id = (await db_client.post(
         "/api/companies", json={"name_en": "Conv Co", "entity_type": "SJSC"}, headers=mfa_headers
     )).json()["id"]
     sh = await _stakeholder(db_client, mfa_headers, company_id, "Angel Fund")
+    await _founder_shares(db_client, mfa_headers, company_id, sh)
     inst = await _safe(db_client, mfa_headers, company_id, sh)
 
     res = await db_client.post(
@@ -171,6 +184,7 @@ async def test_convert_commits_and_issues_shares(db_client, mfa_headers):
         "/api/companies", json={"name_en": "Conv Co", "entity_type": "SJSC"}, headers=mfa_headers
     )).json()["id"]
     sh = await _stakeholder(db_client, mfa_headers, company_id, "Angel Fund")
+    await _founder_shares(db_client, mfa_headers, company_id, sh)
     inst = await _safe(db_client, mfa_headers, company_id, sh)
 
     res = await db_client.post(
@@ -181,7 +195,10 @@ async def test_convert_commits_and_issues_shares(db_client, mfa_headers):
     assert res.status_code == 200, res.text
     body = res.json()
     assert body["committed"] is True
-    assert Decimal(body["shares"]) > 0
+    # Round 10 with 20% discount → 8; cap 1,000,000 / 100,000 pre-money → 10.
+    # Discount is the lower price: 500,000 / 8 = 62,500 shares.
+    assert body["method"] == "discount"
+    assert Decimal(body["shares"]) == Decimal("62500")
 
     # Instrument marked converted.
     got = (await db_client.get(f"/api/companies/{company_id}/instruments/{inst}", headers=mfa_headers)).json()
@@ -198,9 +215,13 @@ async def test_double_convert_rejected(db_client, mfa_headers):
         "/api/companies", json={"name_en": "Conv Co", "entity_type": "SJSC"}, headers=mfa_headers
     )).json()["id"]
     sh = await _stakeholder(db_client, mfa_headers, company_id, "Angel Fund")
+    await _founder_shares(db_client, mfa_headers, company_id, sh)
     inst = await _safe(db_client, mfa_headers, company_id, sh)
     payload = {"round_price_per_share": "10", "share_class": "preferred-a", "event_date": date.today().isoformat()}
-    await db_client.post(f"/api/companies/{company_id}/instruments/{inst}/convert", json=payload, headers=mfa_headers)
+    first = await db_client.post(f"/api/companies/{company_id}/instruments/{inst}/convert", json=payload, headers=mfa_headers)
+    # The first convert must genuinely succeed — otherwise the 422 below would
+    # pass for the wrong reason (e.g. a validation error, not double-convert).
+    assert first.status_code == 200, first.text
     again = await db_client.post(f"/api/companies/{company_id}/instruments/{inst}/convert", json=payload, headers=mfa_headers)
     assert again.status_code == 422
 

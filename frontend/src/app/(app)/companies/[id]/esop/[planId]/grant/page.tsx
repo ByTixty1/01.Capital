@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { api, StakeholderResponse, VestingType } from '@/lib/api';
 import { todayISO } from '@/lib/format';
 
@@ -9,6 +9,7 @@ type MilestoneInput = { label: string; fraction: string };
 
 export default function IssueGrantPage() {
   const { id: companyId, planId } = useParams<{ id: string; planId: string }>();
+  const router = useRouter();
   const [stakeholders, setStakeholders] = useState<StakeholderResponse[]>([]);
   const [stakeholderId, setStakeholderId] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -57,7 +58,7 @@ export default function IssueGrantPage() {
         exercise_price: exercisePrice ? Number(exercisePrice) : undefined,
         notes: notes || undefined,
       });
-      window.location.href = `/companies/${companyId}/esop/${planId}`;
+      router.push(`/companies/${companyId}/esop/${planId}`);
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
     finally { setLoading(false); }
   }

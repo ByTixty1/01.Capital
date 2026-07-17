@@ -1,63 +1,30 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/api';
 import { setSession } from '@/lib/auth';
 import { AuthBrandPanel } from '@/components/AuthBrandPanel';
 
-type Step = 'credentials' | 'mfa';
-
 export default function LoginPage() {
-  const [step, setStep] = useState<Step>('credentials');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mfaCode, setMfaCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const mfaRef = useRef<HTMLInputElement>(null);
 
-  async function handleCredentials(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!email.trim() || !password.trim()) { setError('Email and password are required'); return; }
-    if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
 
     setLoading(true);
     try {
-      const res = await api.auth.login(email, password);
-      if (res.mfa_required) {
-        await setSession(res.access_token);
-        setStep('mfa');
-        setTimeout(() => mfaRef.current?.focus(), 50);
-      } else {
-        await setSession(res.access_token);
-        window.location.href = '/dashboard';
-      }
+      const res = await api.auth.devLogin(email, password);
+      await setSession(res.access_token);
+      window.location.href = '/dashboard';
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Login failed';
       if (msg.includes('Invalid credentials')) setError('Email or password is incorrect.');
-      else if (msg.includes('not verified')) setError('Email not verified. Check your inbox.');
       else setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleMfa(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    const code = mfaCode.replace(/\s/g, '');
-    if (code.length !== 6) { setError('Enter the 6-digit code from your authenticator app'); return; }
-
-    setLoading(true);
-    try {
-      const res = await api.auth.mfaVerify(code);
-      await setSession(res.access_token);
-      window.location.href = '/dashboard';
-    } catch {
-      setError('Invalid code. Try again.');
-      setMfaCode('');
-      mfaRef.current?.focus();
     } finally {
       setLoading(false);
     }
@@ -69,67 +36,28 @@ export default function LoginPage() {
       <AuthBrandPanel />
       <div style={s.formPanel}>
         <div className="glass-panel" style={s.card}>
-
-          {step === 'credentials' && <>
-            <h1 style={s.heading}>Welcome back</h1>
-            <p style={s.sub}>Sign in to your cap table dashboard</p>
-            <form onSubmit={handleCredentials} style={s.form}>
-              <div style={s.field}>
-                <label style={s.label}>Email address</label>
-                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                  required autoComplete="email" placeholder="you@company.com" style={s.input} />
-              </div>
-              <div style={s.field}>
-                <label style={s.label}>Password</label>
-                <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                  required autoComplete="current-password" placeholder="••••••••" style={s.input} />
-              </div>
-              {error && <ErrorBox msg={error} />}
-              <button type="submit" disabled={loading} className="btn-primary" style={s.button}>
-                {loading ? <Spinner label="Signing in…" /> : 'Sign in'}
-              </button>
-            </form>
-            <p style={s.footer}>
-              No account yet?{' '}
-              <a href="/register" className="link-accent" style={s.link}>Create one free</a>
-            </p>
-          </>}
-
-          {step === 'mfa' && <>
-            <div style={s.mfaIconWrap}>
-              <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                <rect width="40" height="40" rx="12" fill="rgba(255,255,255,0.06)" />
-                <rect x="12" y="10" width="16" height="20" rx="3" stroke="var(--text-secondary)" strokeWidth="1.5" />
-                <rect x="16" y="24" width="8" height="3" rx="1.5" fill="var(--text-secondary)" />
-                <circle cx="20" cy="18" r="3" stroke="var(--text-secondary)" strokeWidth="1.5" />
-              </svg>
+          <h1 style={s.heading}>Welcome back</h1>
+          <p style={s.sub}>Sign in to your cap table dashboard</p>
+          <form onSubmit={handleSubmit} style={s.form}>
+            <div style={s.field}>
+              <label style={s.label}>Email address</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                required autoComplete="email" placeholder="you@company.com" style={s.input} />
             </div>
-            <h1 style={s.heading}>Two-factor authentication</h1>
-            <p style={s.sub}>Enter the 6-digit code from your authenticator app</p>
-            <form onSubmit={handleMfa} style={s.form}>
-              <div style={s.field}>
-                <label style={s.label}>Authentication code</label>
-                <input
-                  ref={mfaRef}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={mfaCode}
-                  onChange={e => setMfaCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder="000000"
-                  style={{ ...s.input, fontFamily: 'var(--font-mono)', fontSize: '22px', letterSpacing: '0.35em', textAlign: 'center' }}
-                />
-              </div>
-              {error && <ErrorBox msg={error} />}
-              <button type="submit" disabled={loading || mfaCode.length !== 6} style={s.button}>
-                {loading ? <Spinner label="Verifying…" /> : 'Verify'}
-              </button>
-            </form>
-            <button onClick={() => { setStep('credentials'); setError(null); setMfaCode(''); }}
-              style={s.backBtn}>← Back to login</button>
-          </>}
-
+            <div style={s.field}>
+              <label style={s.label}>Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                required autoComplete="current-password" placeholder="••••••••" style={s.input} />
+            </div>
+            {error && <ErrorBox msg={error} />}
+            <button type="submit" disabled={loading} className="btn-primary" style={s.button}>
+              {loading ? <Spinner label="Signing in…" /> : 'Sign in'}
+            </button>
+          </form>
+          <p style={s.footer}>
+            No account yet?{' '}
+            <a href="/register" className="link-accent" style={s.link}>Create one free</a>
+          </p>
         </div>
       </div>
     </main>

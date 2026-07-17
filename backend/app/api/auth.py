@@ -199,6 +199,29 @@ async def dev_verify_email(
     return TokenResponse(access_token=create_access_token(str(user.id)))
 
 
+@router.post("/dev/login", response_model=TokenResponse, include_in_schema=False)
+async def dev_login(
+    body: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Return a full MFA-verified token without verification or TOTP checks — only outside production."""
+    if settings.environment == "production":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    pw_ok = await verify_password_async(body.password, user.hashed_password)
+    if not pw_ok:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    user.is_verified = True
+    await db.commit()
+    return TokenResponse(access_token=create_access_token(str(user.id), mfa_verified=True))
+
+
 @router.post("/dev/enable-mfa", response_model=TokenResponse, include_in_schema=False)
 async def dev_enable_mfa(
     current_user: User = Depends(get_current_user),
