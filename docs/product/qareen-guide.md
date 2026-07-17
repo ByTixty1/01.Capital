@@ -76,6 +76,16 @@ Privacy and prompt-injection boundaries are applied before transmission:
   inputs, submits, and destructive actions remain visual-only unless their
   stable target is explicitly allowlisted.
 
+Login credentials use a separate browser-local path. On `/login`, a message
+containing an email and password is intercepted before conversation history or
+the Claude request is created. Qareen displays only a sanitized placeholder,
+fills the controlled React inputs through native input events, and never stores
+the values in Zustand/session storage. The submit button is not allowlisted;
+the user must review the fields and press **Sign in** themselves. Incomplete
+credential-shaped messages are also kept local. Typed entry is recommended,
+because browser speech-recognition services may process microphone audio before
+Qareen receives a transcript.
+
 ## Voice behavior
 
 ### Input

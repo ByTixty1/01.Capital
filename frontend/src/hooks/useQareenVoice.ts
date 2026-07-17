@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { useQareenStore } from '@/lib/qareen/store';
-import { runQareenTurn } from '@/lib/qareen/executor';
+import { submitQareenUserInput } from '@/lib/qareen/executor';
 import { getSpeechRecognitionCtor, type SpeechRecognitionLike } from '@/lib/qareen/speechTypes';
 import { primeAudioPlayback } from '@/lib/qareen/audio';
 
@@ -74,14 +74,7 @@ export function useQareenVoice(): void {
       setMicState('thinking');
       turnInFlightRef.current = true;
 
-      useQareenStore.getState().appendConversationEntry({
-        id: `user-${Date.now()}`,
-        role: 'user',
-        text: trimmed,
-        timestamp: Date.now(),
-      });
-
-      void runQareenTurn(trimmed, interrupted).finally(() => {
+      void submitQareenUserInput(trimmed, interrupted).finally(() => {
         turnInFlightRef.current = false;
         if (useQareenStore.getState().micMasterOn) {
           setTimeout(() => setMicState('live'), REOPEN_DELAY_MS);

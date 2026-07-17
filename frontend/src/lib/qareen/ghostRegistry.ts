@@ -44,6 +44,10 @@ export const GHOST_ELEMENT_IDS = [
   'nav_language_toggle',
   'nav_sign_in',
   'nav_get_started',
+  // /login — fields may only be filled by the browser-local credential path
+  'login_email',
+  'login_password',
+  'login_submit',
   // /cap-table
   'captable_page_headline',
   'captable_page_features',
@@ -104,6 +108,9 @@ export const GHOST_ROUTES: Partial<Record<GhostElementId, string>> = {
   instruments_section: '/',
   cta_button: '/',
   nav_language_toggle: '/',
+  login_email: '/login',
+  login_password: '/login',
+  login_submit: '/login',
   captable_page_headline: '/cap-table',
   captable_page_features: '/cap-table',
   captable_page_cta: '/cap-table',

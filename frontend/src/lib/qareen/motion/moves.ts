@@ -54,8 +54,9 @@ export async function pressWorker(
  */
 export async function typeWorkerChar(w: WorkerHandState, charIndex: number): Promise<void> {
   if (charIndex % 3 === 2) {
-    await tween(w, { z: w.z - 3 }, 40, 'out');
-    await tween(w, { z: w.z + 8 }, 60, 'out');
+    const baselineZ = w.z;
+    await tween(w, { z: baselineZ - 3 }, 40, 'out');
+    await tween(w, { z: baselineZ }, 60, 'out');
   }
   await new Promise<void>((resolve) => setTimeout(resolve, 64));
 }

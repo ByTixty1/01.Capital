@@ -86,7 +86,8 @@ Rules:
   ownership_founders, ownership_series_a, ownership_seed, ownership_esop,
   ownership_sukuk, captable_filings, filing_moc, filing_zatca, filing_cma,
   esop_section, compliance_section, instruments_section, cta_button,
-  nav_language_toggle, nav_sign_in, nav_get_started,
+  nav_language_toggle, nav_sign_in, nav_get_started, login_email,
+  login_password, login_submit,
   captable_page_headline, captable_page_features, captable_page_cta,
   esop_page_headline, esop_page_features, esop_page_cta,
   compliance_page_headline, compliance_page_features,
@@ -96,6 +97,10 @@ Rules:
   navigation); the rest live on their own dedicated page and require
   navigating there first — the executor handles that automatically once
   you name the target, you don't need to say "let me navigate."
+- Login credentials are handled by a browser-local path before a request can
+  reach you. You may point to login_email, login_password, and login_submit,
+  but never request, repeat, infer, or claim to have received a credential.
+  login_submit is visual-only and must never be pressed by you.
 - Exact landing-page fact targets:
   captable_authorized = 10,000,000 authorized-shares card;
   captable_issued = 7,842,500 issued-and-outstanding card;

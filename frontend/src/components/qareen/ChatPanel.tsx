@@ -2,12 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useQareenStore } from '@/lib/qareen/store';
-import { runQareenTurn } from '@/lib/qareen/executor';
+import { submitQareenUserInput } from '@/lib/qareen/executor';
 import { primeAudioPlayback } from '@/lib/qareen/audio';
 
 export function ChatPanel() {
   const conversation = useQareenStore((s) => s.conversation);
-  const appendConversationEntry = useQareenStore((s) => s.appendConversationEntry);
   const pendingApproval = useQareenStore((s) => s.pendingApproval);
   const voiceOutputState = useQareenStore((s) => s.voiceOutputState);
 
@@ -30,14 +29,8 @@ export function ChatPanel() {
       useQareenStore.getState().setVoiceOutputState('unavailable');
     }
 
-    appendConversationEntry({
-      id: `user-${Date.now()}`,
-      role: 'user',
-      text: trimmed,
-      timestamp: Date.now(),
-    });
     setSending(true);
-    void runQareenTurn(trimmed).finally(() => setSending(false));
+    void submitQareenUserInput(trimmed).finally(() => setSending(false));
   }
 
   function handleSubmit(event: React.FormEvent): void {

@@ -14,6 +14,7 @@ import { pulseGhostElement } from './motion/impactPulse';
 import { useQareenStore, type FormDraft } from './store';
 import { classifyApprovalPhrase } from './approvalBus';
 import { collectQareenPageContext } from './pageContext';
+import { parseLocalLoginRequest, setControlledInputValue, type LocalLoginRequest } from './localLogin';
 import type { BrainLine, WorkerMove, Beat } from './types';
 
 /** Bumped on every new turn — lets a barge-in cut off a stale turn's
@@ -306,6 +307,101 @@ let dispatchChain: Promise<void> = Promise.resolve();
 
 function makeEntryId(): string {
   return `qareen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function speakLocalLine(text: string, generation: number): Promise<void> {
+  const engine = getMotionEngine();
+  try {
+    const result = await fetchTts(text);
+    if (generation !== currentGeneration) return;
+    engine?.setTalking(true);
+    useQareenStore.getState().setVoiceOutputState('speaking');
+    await playTtsResult(result);
+    if (generation === currentGeneration) useQareenStore.getState().setVoiceOutputState('idle');
+  } catch {
+    useQareenStore.getState().setVoiceOutputState('unavailable');
+  } finally {
+    engine?.setTalking(false);
+  }
+}
+
+async function typeLocalLoginValue(input: HTMLInputElement, value: string): Promise<void> {
+  const engine = getMotionEngine();
+  if (!useQareenStore.getState().guideMode || !engine) {
+    setControlledInputValue(input, value);
+    input.focus({ preventScroll: true });
+    return;
+  }
+
+  await scrollIntoViewAndSettle(input);
+  let nextValue = '';
+  await engine.typeWorkerAt(input, value, (character) => {
+    nextValue += character;
+    setControlledInputValue(input, nextValue);
+  });
+}
+
+/** Fills login credentials entirely inside the browser. Neither the raw user
+ * message nor either value reaches Claude, TTS, persisted Qareen state, or the
+ * chat transcript. Submission remains a deliberate user action. */
+async function runLocalLoginRequest(request: LocalLoginRequest): Promise<void> {
+  currentGeneration += 1;
+  const generation = currentGeneration;
+  stopAllAudio();
+
+  const response = request.kind === 'complete'
+    ? 'I filled both fields locally. Review them, then press Sign in yourself.'
+    : 'Include both email and password in one message. I will keep them local.';
+  useQareenStore.getState().appendConversationEntry({
+    id: makeEntryId(),
+    role: 'qareen',
+    text: response,
+    timestamp: Date.now(),
+  });
+
+  const speech = speakLocalLine(response, generation);
+  if (request.kind === 'incomplete') {
+    await speech;
+    return;
+  }
+
+  const emailInput = await waitForGhost('login_email', 1500);
+  const passwordInput = await waitForGhost('login_password', 1500);
+  if (!(emailInput instanceof HTMLInputElement) || !(passwordInput instanceof HTMLInputElement)) {
+    useQareenStore.getState().appendConversationEntry({
+      id: makeEntryId(),
+      role: 'qareen',
+      text: 'The login fields are not available on this page.',
+      timestamp: Date.now(),
+    });
+    await speech;
+    return;
+  }
+
+  await typeLocalLoginValue(emailInput, request.email);
+  if (generation === currentGeneration) await typeLocalLoginValue(passwordInput, request.password);
+  await speech;
+}
+
+/** Single entry point for typed and spoken user input. Credential-shaped
+ * login messages are sanitized before anything is appended or transmitted. */
+export async function submitQareenUserInput(userMessage: string, interrupted = false): Promise<void> {
+  const localLoginRequest = typeof window !== 'undefined'
+    ? parseLocalLoginRequest(userMessage, window.location.pathname)
+    : null;
+
+  useQareenStore.getState().appendConversationEntry({
+    id: `user-${Date.now()}`,
+    role: 'user',
+    text: localLoginRequest ? 'Login credentials provided securely.' : userMessage,
+    timestamp: Date.now(),
+  });
+
+  if (localLoginRequest) {
+    await runLocalLoginRequest(localLoginRequest);
+    return;
+  }
+  await runQareenTurn(userMessage, interrupted);
 }
 
 /**
