@@ -86,3 +86,4 @@ graphify-out/
 # Playwright outputs
 frontend/test-results/
 frontend/playwright-report/
+output/

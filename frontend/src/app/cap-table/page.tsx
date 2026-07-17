@@ -3,6 +3,7 @@ import { MarketingFeaturePage } from '@/components/MarketingFeaturePage';
 export default function CapTablePage() {
   return (
     <MarketingFeaturePage
+      ghostPrefix="captable_page"
       badge="Cap Table"
       headline={<>Ownership clarity,<br />at every stage</>}
       sub="A real-time cap table built around the 2023 Saudi Companies Law. Every issuance, transfer, and dilution event is recorded immutably — your ownership register is always audit-ready."

@@ -30,14 +30,14 @@ export default function StakeholdersPage() {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '28px', fontWeight: 400, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)', marginBottom: '4px' }}>
+          <h1 data-ghost="app_stakeholders_headline" style={{ fontSize: '28px', fontWeight: 400, fontFamily: 'var(--font-serif)', color: 'var(--text-primary)', marginBottom: '4px' }}>
             Stakeholders
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
             Individuals and entities that hold or will hold shares in this company.
           </p>
         </div>
-        <Link href={`/companies/${companyId}/stakeholders/new`} className="btn-primary" style={{
+        <Link data-ghost="app_stakeholders_add" href={`/companies/${companyId}/stakeholders/new`} className="btn-primary" style={{
           textDecoration: 'none',
           padding: '10px 20px', borderRadius: '8px', fontSize: '14px', fontWeight: 500,
         }}>
@@ -45,6 +45,7 @@ export default function StakeholdersPage() {
         </Link>
       </div>
 
+      <div data-ghost="app_stakeholders_list">
       {loading && <p style={{ color: 'var(--text-tertiary)', fontSize: '14px' }}>Loading stakeholders...</p>}
       {error && <p style={{ color: 'var(--neg)', fontSize: '14px' }}>{error}</p>}
 
@@ -125,7 +126,7 @@ export default function StakeholdersPage() {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }
-

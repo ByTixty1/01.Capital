@@ -26,13 +26,13 @@ export default function InstrumentsPage() {
     <div style={s.page}>
       <div style={s.back}><a href={`/companies/${companyId}`} style={s.backLink}>← Back</a></div>
       <div style={s.header}>
-        <div><h1 style={s.heading}>Instruments</h1><p style={s.sub}>Convertible sukuk, phantom shares, and warrants</p></div>
-        <a href={`/companies/${companyId}/instruments/new`} className="btn-primary" style={s.cta}>+ New instrument</a>
+        <div><h1 data-ghost="app_instruments_headline" style={s.heading}>Instruments</h1><p style={s.sub}>Convertible sukuk, phantom shares, and warrants</p></div>
+        <a data-ghost="app_instruments_new" href={`/companies/${companyId}/instruments/new`} className="btn-primary" style={s.cta}>+ New instrument</a>
       </div>
       {loading && <p style={s.muted}>Loading…</p>}
       {error && <p style={s.error}>{error}</p>}
       {!loading && instruments.length === 0 && <p style={s.muted}>No instruments recorded.</p>}
-      <div style={s.list}>
+      <div data-ghost="app_instruments_list" style={s.list}>
         {instruments.map(inst => (
           <div key={inst.id} style={s.card}>
             <div style={s.cardTop}>
