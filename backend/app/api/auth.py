@@ -125,18 +125,9 @@ async def register(
     await db.flush()
     await _audit(db, AuditAction.LOGIN_SUCCESS, request, user_id=user.id, detail=audit_detail)
 
-    if settings.environment != "production":
-        user.is_verified = True
-    else:
-        try:
-            await send_verification_email(user.email, otp)
-        except Exception as e:
-            await db.rollback()
-            logger.exception("Verification email send failed for %s", body.email)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Could not send verification email. Please try again.",
-            ) from e
+    user.is_verified = True
+    # Email verification disabled for demo — re-enable before real customer data.
+    logger.info("Skipping email verification for %s (demo mode)", user.email)
 
     await db.commit()
     return RegisterResponse(message="Please verify your email", email=user.email)
@@ -301,18 +292,9 @@ async def login(
         await db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    if not user.is_verified:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email not verified")
-
+    # Email verification + MFA disabled for demo — re-enable before real customer data.
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
-
-    # If MFA is enabled, return a partial token requiring TOTP verification
-    if user.mfa_enabled:
-        partial_token = create_access_token(str(user.id), mfa_verified=False)
-        await _audit(db, AuditAction.LOGIN_SUCCESS, request, user_id=user.id, detail="mfa_required")
-        await db.commit()
-        return TokenResponse(access_token=partial_token, mfa_required=True)
 
     await _audit(db, AuditAction.LOGIN_SUCCESS, request, user_id=user.id)
     await db.commit()

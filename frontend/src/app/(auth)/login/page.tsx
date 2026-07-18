@@ -24,7 +24,7 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await api.auth.devLogin(email, password);
+      const res = await api.auth.login(email, password);
       await setSession(res.access_token);
       window.location.href = '/dashboard';
     } catch (err) {

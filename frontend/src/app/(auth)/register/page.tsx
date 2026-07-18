@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { setSession } from '@/lib/auth';
 import { AuthBrandPanel } from '@/components/AuthBrandPanel';
 
 export default function RegisterPage() {
@@ -45,9 +44,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await api.auth.register(email, password, fullName || undefined);
-      const res = await api.auth.devVerifyEmail(email);
-      await setSession(res.access_token);
-      window.location.href = '/dashboard';
+      window.location.href = `/login`;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Registration failed';
       // Provide helpful error messages
