@@ -1,20 +1,24 @@
-"""Transactional email via Resend. Falls back to console log when API key is absent."""
+"""Transactional email via Gmail SMTP. Falls back to console log when password is absent."""
 
 import logging
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
-import httpx
+import aiosmtplib
 
 from app.core.config import settings
 
 logger = logging.getLogger("01capital.email")
 
-_RESEND_URL = "https://api.resend.com/emails"
-
 
 async def send_verification_email(to_email: str, otp: str) -> None:
-    """Send OTP verification email. Logs to console if RESEND_API_KEY is not set."""
-    if not settings.resend_api_key:
-        logger.info("DEV — verification OTP for %s: %s (set RESEND_API_KEY to send real emails)", to_email, otp)
+    """Send OTP verification email via Gmail SMTP. Logs to console if SMTP_PASSWORD is not set."""
+    if not settings.smtp_password:
+        logger.info(
+            "DEV — verification OTP for %s: %s (set SMTP_PASSWORD to send real emails)",
+            to_email,
+            otp,
+        )
         return
 
     html = f"""
@@ -31,17 +35,18 @@ async def send_verification_email(to_email: str, otp: str) -> None:
     </div>
     """
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(
-            _RESEND_URL,
-            headers={"Authorization": f"Bearer {settings.resend_api_key}"},
-            json={
-                "from": settings.email_from,
-                "to": [to_email],
-                "subject": "Your 01 Capital verification code",
-                "html": html,
-            },
-        )
-        if resp.status_code >= 400:
-            logger.error("Resend error %s: %s", resp.status_code, resp.text)
-            resp.raise_for_status()
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Your 01 Capital verification code"
+    msg["From"] = settings.email_from
+    msg["To"] = to_email
+    msg.attach(MIMEText(html, "html"))
+
+    await aiosmtplib.send(
+        msg,
+        hostname=settings.smtp_host,
+        port=settings.smtp_port,
+        username=settings.smtp_user,
+        password=settings.smtp_password,
+        start_tls=True,
+    )
+    logger.info("Verification email sent to %s", to_email)

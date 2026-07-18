@@ -26,9 +26,12 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://01capital:01capital@localhost:5432/01capital"
 
-    # Email (Resend)
-    resend_api_key: str = ""
-    email_from: str = "01 Capital <noreply@01capital.app>"
+    # Email — Gmail SMTP
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str = "zeroone.techcompany@gmail.com"
+    smtp_password: str = ""  # Gmail App Password — set in Render env vars
+    email_from: str = "01 Capital <zeroone.techcompany@gmail.com>"
 
     # Qareen hackathon prototype (see ADR-0009) — narrow/optional, no DB access.
     anthropic_api_key: str = ""

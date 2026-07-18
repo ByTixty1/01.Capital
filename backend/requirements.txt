@@ -37,6 +37,9 @@ Jinja2==3.1.4
 anthropic==0.40.0
 edge-tts==7.2.8
 
+# Email (async SMTP)
+aiosmtplib==3.0.2
+
 # Dev / testing
 pytest==8.3.4
 pytest-asyncio==0.25.2
