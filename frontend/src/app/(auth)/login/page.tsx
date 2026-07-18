@@ -24,19 +24,12 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await api.auth.login(email, password);
-      if (res.mfa_required) {
-        await setSession(res.access_token);
-        setStep('mfa');
-        setTimeout(() => mfaRef.current?.focus(), 50);
-      } else {
-        await setSession(res.access_token);
-        window.location.href = '/dashboard';
-      }
+      const res = await api.auth.devLogin(email, password);
+      await setSession(res.access_token);
+      window.location.href = '/dashboard';
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Login failed';
       if (msg.includes('Invalid credentials')) setError('Email or password is incorrect.');
-      else if (msg.includes('not verified')) setError('Email not verified. Check your inbox.');
       else setError(msg);
     } finally {
       setLoading(false);

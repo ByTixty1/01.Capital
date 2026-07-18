@@ -184,7 +184,7 @@ async def dev_verify_email(
     Used by automated tests and local E2E suites to bypass email delivery.
     The endpoint is excluded from the OpenAPI schema and returns 404 in production.
     """
-    if settings.environment == "production":
+    if not settings.dev_auth_bypass:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
     result = await db.execute(select(User).where(User.email == body.email))
@@ -205,7 +205,7 @@ async def dev_login(
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     """Return a full MFA-verified token without verification or TOTP checks — only outside production."""
-    if settings.environment == "production":
+    if not settings.dev_auth_bypass:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
     result = await db.execute(select(User).where(User.email == body.email))
@@ -232,7 +232,7 @@ async def dev_enable_mfa(
     Used by automated tests that need a fully-authenticated MFA token to access
     cap-table endpoints protected by require_mfa. Returns a full (mfa_verified=True) token.
     """
-    if settings.environment == "production":
+    if not settings.dev_auth_bypass:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
     if not current_user.mfa_secret:
