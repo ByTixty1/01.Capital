@@ -125,15 +125,18 @@ async def register(
     await db.flush()
     await _audit(db, AuditAction.LOGIN_SUCCESS, request, user_id=user.id, detail=audit_detail)
 
-    try:
-        await send_verification_email(user.email, otp)
-    except Exception as e:
-        await db.rollback()
-        logger.exception("Verification email send failed for %s", body.email)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not send verification email. Please try again.",
-        ) from e
+    if settings.dev_auth_bypass:
+        user.is_verified = True
+    else:
+        try:
+            await send_verification_email(user.email, otp)
+        except Exception as e:
+            await db.rollback()
+            logger.exception("Verification email send failed for %s", body.email)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Could not send verification email. Please try again.",
+            ) from e
 
     await db.commit()
     return RegisterResponse(message="Please verify your email", email=user.email)
