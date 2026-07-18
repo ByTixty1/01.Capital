@@ -36,10 +36,6 @@ class Settings(BaseSettings):
     # Qareen hackathon prototype (see ADR-0009) — narrow/optional, no DB access.
     anthropic_api_key: str = ""
 
-    # Dev auth bypass — disables email verification + MFA on /auth/dev/* endpoints.
-    # Set to True locally and on Render while testing; flip to False before real customers.
-    dev_auth_bypass: bool = False
-
     # Rate limiting — disable only for local e2e runs where one IP registers
     # many users in quick succession; never disable in deployed environments.
     rate_limit_enabled: bool = True

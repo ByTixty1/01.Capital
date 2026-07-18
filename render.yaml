@@ -21,7 +21,7 @@ services:
     autoDeploy: true
     envVars:
       - key: ENVIRONMENT
-        value: production
+        value: staging
       - key: DEBUG
         value: "false"
       - key: LOG_LEVEL
@@ -49,7 +49,3 @@ services:
         value: zeroone.techcompany@gmail.com
       - key: SMTP_PASSWORD
         sync: false
-      # Auth bypass — disables email OTP + MFA on /auth/dev/* endpoints.
-      # Flip to "false" before real customers.
-      - key: DEV_AUTH_BYPASS
-        value: "true"
