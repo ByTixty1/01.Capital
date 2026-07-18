@@ -43,5 +43,9 @@ services:
       #   python3 -c "import secrets; print(secrets.token_hex(32))"
       - key: FIELD_ENCRYPTION_KEY
         sync: false
-      - key: RESEND_API_KEY
+      # Gmail SMTP sender — set SMTP_PASSWORD to a Gmail App Password
+      # (myaccount.google.com/apppasswords). SMTP_USER is the sender address.
+      - key: SMTP_USER
+        value: zeroone.techcompany@gmail.com
+      - key: SMTP_PASSWORD
         sync: false
